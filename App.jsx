@@ -114,27 +114,24 @@ function App() {
   });
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [activeModal, setActiveModal] = useState(null); // 'transactions', 'categories_detail', 'goals_detail', 'budget_planner', 'adjust', 'add_tx', 'add_debt', 'add_goal'
+  const [activeModal, setActiveModal] = useState(null); 
   
-  // State สำหรับเติมเงินเป้าหมายออม
   const [goalToDeposit, setGoalToDeposit] = useState(null);
   const [depositAmount, setDepositAmount] = useState("");
 
-  // State สำหรับวางแผนการเงิน (Budget Sets)
+  // Budget Sets State
   const [budgetSets, setBudgetSets] = useState(() => {
     const saved = localStorage.getItem("bp_budgetSets");
-    return saved ? JSON.parse(saved) : [
-      { id: "1", name: "Set 1: งบปกติ 700 บาท", totalBudget: 700, items: { food: 300, transport: 200, shopping: 100, other_exp: 100 } }
-    ];
+    return saved ? JSON.parse(saved) : [];
   });
   const [activeBudgetSetId, setActiveBudgetSetId] = useState(() => {
-    return localStorage.getItem("bp_activeBudgetSetId") || "1";
+    return localStorage.getItem("bp_activeBudgetSetId") || "";
   });
   
-  // Inputs สำหรับสร้าง/แก้ไข Set แผนการเงิน
   const [newSetName, setNewSetName] = useState("");
   const [newSetTotal, setNewSetTotal] = useState("");
   const [setAllocations, setSetAllocations] = useState({});
+  const [setCustomLabels, setSetCustomLabels] = useState({});
 
   // Profile State
   const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "");
@@ -154,7 +151,6 @@ function App() {
   const [reports, setReports] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
 
-  // Delete Confirmation State
   const [itemToDelete, setItemToDelete] = useState(null);
 
   // Core Data State
@@ -178,7 +174,6 @@ function App() {
     return saved ? JSON.parse(saved) : { bank: 0, cash: 0 };
   });
 
-  // Inputs ธุรกรรมทั่วไป
   const [type, setType] = useState("expense");
   const [account, setAccount] = useState("bank");
   const [amount, setAmount] = useState("");
@@ -199,14 +194,12 @@ function App() {
   const [bankRealInput, setBankRealInput] = useState("");
   const [cashRealInput, setCashRealInput] = useState("");
 
-  // Scanner State
   const [scanning, setScanning] = useState(false);
   const [queueStatus, setQueueStatus] = useState({ current: 0, total: 0, successCount: 0 });
   const [scanMessage, setScanMessage] = useState("");
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // Calculations
   const calcBankTotal =
     transactions.reduce(
       (acc, t) => (t.account === "bank" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
@@ -252,7 +245,6 @@ function App() {
     return gradients.join(", ");
   };
 
-  // Sync LocalStorage
   useEffect(() => localStorage.setItem("bp_userName", userName), [userName]);
   useEffect(() => localStorage.setItem("bp_userAvatar", userAvatar), [userAvatar]);
   useEffect(() => localStorage.setItem("bp_transactions", JSON.stringify(transactions)), [transactions]);
@@ -262,7 +254,6 @@ function App() {
   useEffect(() => localStorage.setItem("bp_budgetSets", JSON.stringify(budgetSets)), [budgetSets]);
   useEffect(() => localStorage.setItem("bp_activeBudgetSetId", activeBudgetSetId), [activeBudgetSetId]);
 
-  // Firebase User Sync
   useEffect(() => {
     const syncUserData = async () => {
       try {
@@ -285,7 +276,6 @@ function App() {
     if (userName) syncUserData();
   }, [userName, userAvatar, totalBalance, deviceId]);
 
-  // Firebase Admin Fetch
   useEffect(() => {
     if (!isAdminLoggedIn) return;
     const fetchAdminData = async () => {
@@ -319,6 +309,8 @@ function App() {
       setBudgetSets(remaining);
       if (activeBudgetSetId === itemToDelete.id && remaining.length > 0) {
         setActiveBudgetSetId(remaining[0].id);
+      } else if (remaining.length === 0) {
+        setActiveBudgetSetId("");
       }
     }
     setItemToDelete(null);
@@ -348,12 +340,14 @@ function App() {
       name: newSetName.trim(),
       totalBudget: Number(newSetTotal),
       items: { ...setAllocations },
+      customLabels: { ...setCustomLabels },
     };
     setBudgetSets((prev) => [...prev, newSet]);
     setActiveBudgetSetId(newId);
     setNewSetName("");
     setNewSetTotal("");
     setSetAllocations({});
+    setSetCustomLabels({});
     alert("บันทึกเซ็ตแผนการเงินเรียบร้อยแล้ว!");
   };
 
@@ -684,7 +678,7 @@ function App() {
         </div>
       )}
 
-      {/* 🗺️ Modal หน้าต่างวางแผนการเงินแยกต่างหากแบบเกมเซ็ต (Set 1, 2, 3) */}
+      {/* 🗺️ Modal หน้าวางแผนการเงิน (เงื่อนไขอัจฉริยะ: ถ้ายังไม่เคยกรอก จะขึ้นแบบอันที่ 2 โล่งๆ ทันที) */}
       {activeModal === "budget_planner" && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
@@ -696,127 +690,210 @@ function App() {
               <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold">✕</button>
             </div>
 
-            <div className="overflow-y-auto space-y-5 flex-1 pr-1">
-              {/* แถบเลือกเซ็ต (Set Tabs) */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-700 block">🎮 เลือกเซ็ตแผนการเงินที่ใช้งานอยู่:</label>
-                <div className="flex flex-wrap gap-2">
-                  {budgetSets.map((set) => (
-                    <div key={set.id} className="flex items-center">
-                      <button
-                        onClick={() => setActiveBudgetSetId(set.id)}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                          activeBudgetSetId === set.id
-                            ? "bg-[#1E1E1E] text-white shadow-md"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                      >
-                        <span>🛡️ {set.name}</span>
-                        <span className="text-[10px] opacity-85">({formatMoney(set.totalBudget)} บ.)</span>
-                      </button>
-                      {budgetSets.length > 1 && (
-                        <button
-                          onClick={() => setItemToDelete({ type: "budgetSet", id: set.id })}
-                          className="text-gray-400 hover:text-rose-600 ml-1.5 text-xs"
-                          title="ลบเซ็ตนี้"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* แสดงรายละเอียดเซ็ตที่เลือก */}
-              {activeBudgetSet && (
-                <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-sm font-bold text-emerald-900">📋 รายละเอียด: {activeBudgetSet.name}</h4>
-                    <span className="text-xs font-extrabold text-emerald-700">งบตั้งต้น: {formatMoney(activeBudgetSet.totalBudget)} บาท</span>
+            <div className="overflow-y-auto space-y-6 flex-1 pr-1">
+              {budgetSets.length === 0 ? (
+                // ถ้ายังไม่เคยกรอกข้อมูลเลย ให้ขึ้นแบบที่ 2 (ฟอร์มโล่งๆ สร้างเซ็ตแรก) ทันที
+                <div className="space-y-4 pt-1">
+                  <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl text-xs text-emerald-800 font-medium">
+                    👋 ยินดีต้อนรับสู่ระบบวางแผนการเงิน! เริ่มต้นสร้างเซ็ตแรกของคุณด้านล่างนี้ได้เลย (เช่น งบ 700 บาท)
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {EXPENSE_CATEGORIES.map((cat) => {
-                      const allocated = activeBudgetSet.items[cat.key] || 0;
-                      if (allocated === 0) return null;
-                      const percent = activeBudgetSet.totalBudget > 0 ? ((allocated / activeBudgetSet.totalBudget) * 100).toFixed(0) : 0;
-                      return (
-                        <div key={cat.key} className="bg-white p-2.5 rounded-xl border border-emerald-100 flex justify-between items-center text-xs">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                            <span className="font-semibold text-gray-800">{cat.label}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-bold text-rose-600">{formatMoney(allocated)} บ.</span>
-                            <span className="text-[10px] text-gray-400 ml-1.5">({percent}%)</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="pt-2 border-t border-emerald-200 flex justify-between text-xs font-bold text-gray-700">
-                    <span>จัดสรรรวม: <span className="text-rose-600">{formatMoney(totalAllocated)} บ.</span></span>
-                    <span>เงินเหลือสำรอง/ฉุกเฉิน: <span className="text-emerald-700">{formatMoney(remainingBudget)} บ.</span></span>
-                  </div>
-                </div>
-              )}
-
-              {/* ฟอร์มสร้างเซ็ตใหม่ (Set ใหม่) */}
-              <div className="p-4 bg-gray-50 rounded-2xl border space-y-3">
-                <h4 className="text-xs font-bold text-gray-800">➕ สร้างเซ็ตแผนการเงินใหม่ (เช่น Set 2, Set 3)</h4>
-                <form onSubmit={handleSaveNewBudgetSet} className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="ชื่อเซ็ต (เช่น Set 2: งบวันหยุด)"
-                      value={newSetName}
-                      onChange={(e) => setNewSetName(e.target.value)}
-                      className="px-3 py-2 border rounded-xl text-xs bg-white"
-                      required
-                    />
-                    <input
-                      type="number"
-                      placeholder="งบตั้งต้นทั้งหมด (บาท)"
-                      value={newSetTotal}
-                      onChange={(e) => setNewSetTotal(e.target.value)}
-                      className="px-3 py-2 border rounded-xl text-xs bg-white"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-gray-600 block">จัดสรรงบแยกตามหมวดหมู่:</label>
+                  <form onSubmit={handleSaveNewBudgetSet} className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {EXPENSE_CATEGORIES.map((cat) => (
-                        <div key={cat.key} className="flex items-center gap-2 bg-white p-2 rounded-xl border">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
-                          <span className="text-xs text-gray-700 flex-1 truncate">{cat.label}</span>
-                          <input
-                            type="number"
-                            placeholder="0"
-                            value={setAllocations[cat.key] || ""}
-                            onChange={(e) => setSetAllocations({ ...setAllocations, [cat.key]: e.target.value })}
-                            className="w-20 px-2 py-1 border rounded-lg text-xs bg-gray-50 text-right"
-                          />
+                      <input
+                        type="text"
+                        placeholder="ชื่อเซ็ต (เช่น Set 1: งบปกติ 700 บาท)"
+                        value={newSetName}
+                        onChange={(e) => setNewSetName(e.target.value)}
+                        className="px-3 py-2 border rounded-xl text-xs bg-white"
+                        required
+                      />
+                      <input
+                        type="number"
+                        placeholder="งบตั้งต้นทั้งหมด (บาท)"
+                        value={newSetTotal}
+                        onChange={(e) => setNewSetTotal(e.target.value)}
+                        className="px-3 py-2 border rounded-xl text-xs bg-white"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-bold text-gray-600 block">จัดสรรงบแยกตามหมวดหมู่:</label>
+                      <div className="space-y-2">
+                        {EXPENSE_CATEGORIES.map((cat) => (
+                          <div key={cat.key} className="flex items-center gap-2 bg-white p-2.5 rounded-2xl border border-gray-100 shadow-sm">
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                            {cat.key === "other_exp" ? (
+                              <input
+                                type="text"
+                                placeholder="ตั้งชื่อเอง (แทนคำว่าอื่นๆ)"
+                                value={setCustomLabels[cat.key] || ""}
+                                onChange={(e) => setSetCustomLabels({ ...setCustomLabels, [cat.key]: e.target.value })}
+                                className="flex-1 px-2 py-1 border rounded-lg text-xs bg-gray-50 text-gray-800 font-medium"
+                              />
+                            ) : (
+                              <span className="text-xs text-gray-700 font-medium flex-1 truncate">{cat.label}</span>
+                            )}
+                            <input
+                              type="number"
+                              placeholder="0"
+                              value={setAllocations[cat.key] || ""}
+                              onChange={(e) => setSetAllocations({ ...setAllocations, [cat.key]: e.target.value })}
+                              className="w-24 px-2.5 py-1.5 border rounded-xl text-xs bg-gray-50 text-right font-bold"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-1 text-xs font-bold text-gray-600 px-1">
+                      <span>จัดสรรแล้ว: {formatMoney(newSetTotalAllocated)} / {formatMoney(newSetTotal)} บ.</span>
+                      <span className={newSetRemaining < 0 ? "text-rose-600" : "text-emerald-600"}>
+                        เหลือสำรอง: {formatMoney(newSetRemaining)} บ.
+                      </span>
+                    </div>
+
+                    <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold hover:bg-black transition shadow-sm">
+                      💾 บันทึกเซ็ตแผนการเงินนี้
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                // ถ้ามีข้อมูลแล้ว จะขึ้นแบบที่ 1 (โชว์เซ็ตที่มี และมีฟอร์มสร้างเซ็ตเพิ่มด้านล่าง)
+                <>
+                  {/* แถบเลือกเซ็ต */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-700 block">🎮 เลือกเซ็ตแผนการเงินที่ใช้งานอยู่:</label>
+                    <div className="flex flex-wrap gap-2">
+                      {budgetSets.map((set) => (
+                        <div key={set.id} className="flex items-center">
+                          <button
+                            onClick={() => setActiveBudgetSetId(set.id)}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                              activeBudgetSetId === set.id
+                                ? "bg-[#1E1E1E] text-white shadow-md"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            }`}
+                          >
+                            <span>🛡️ {set.name}</span>
+                            <span className="text-[10px] opacity-85">({formatMoney(set.totalBudget)} บ.)</span>
+                          </button>
+                          {budgetSets.length > 1 && (
+                            <button
+                              onClick={() => setItemToDelete({ type: "budgetSet", id: set.id })}
+                              className="text-gray-400 hover:text-rose-600 ml-1.5 text-xs"
+                              title="ลบเซ็ตนี้"
+                            >
+                              ✕
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center pt-2 text-xs font-bold">
-                    <span>จัดสรรแล้ว: {formatMoney(newSetTotalAllocated)} / {formatMoney(newSetTotal)} บ.</span>
-                    <span className={newSetRemaining < 0 ? "text-rose-600" : "text-emerald-600"}>
-                      เหลือสำรอง: {formatMoney(newSetRemaining)} บ.
-                    </span>
-                  </div>
+                  {/* แสดงรายละเอียดเซ็ตที่เลือก */}
+                  {activeBudgetSet && (
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center text-xs font-bold px-1">
+                        <span className="text-gray-800">📋 รายละเอียด: {activeBudgetSet.name}</span>
+                        <span className="text-gray-500">งบตั้งต้น: <b className="text-gray-900">{formatMoney(activeBudgetSet.totalBudget)}</b> บาท</span>
+                      </div>
 
-                  <button type="submit" className="w-full bg-[#1E1E1E] text-white py-2.5 rounded-xl text-xs font-bold hover:bg-black transition">
-                    💾 บันทึกเซ็ตแผนการเงินนี้
-                  </button>
-                </form>
-              </div>
+                      <div className="space-y-2">
+                        {EXPENSE_CATEGORIES.map((cat) => {
+                          const allocated = activeBudgetSet.items[cat.key] || 0;
+                          if (allocated === 0) return null;
+                          const percent = activeBudgetSet.totalBudget > 0 ? ((allocated / activeBudgetSet.totalBudget) * 100).toFixed(0) : 0;
+                          const labelName = cat.key === "other_exp" && activeBudgetSet.customLabels?.[cat.key] ? activeBudgetSet.customLabels[cat.key] : cat.label;
+                          return (
+                            <div key={cat.key} className="flex justify-between items-center py-2.5 px-3 bg-white border border-gray-100 rounded-2xl text-xs shadow-sm">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                                <span className="font-semibold text-gray-800">{labelName}</span>
+                              </div>
+                              <div>
+                                <span className="font-bold text-rose-600">{formatMoney(allocated)} บ.</span>
+                                <span className="text-[10px] text-gray-400 ml-2">({percent}%)</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex justify-between text-xs font-bold pt-1 px-1 text-gray-600">
+                        <span>จัดสรรรวม: <span className="text-rose-600">{formatMoney(totalAllocated)} บ.</span></span>
+                        <span>เงินเหลือสำรอง/ฉุกเฉิน: <span className="text-emerald-600">{formatMoney(remainingBudget)} บ.</span></span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ฟอร์มสร้างเซ็ตใหม่เพิ่มเติม */}
+                  <div className="space-y-3 pt-4 border-t">
+                    <h4 className="text-xs font-bold text-gray-800">➕ สร้างเซ็ตแผนการเงินเพิ่ม (เช่น Set 2, Set 3)</h4>
+                    <form onSubmit={handleSaveNewBudgetSet} className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          placeholder="ชื่อเซ็ต (เช่น Set 2: งบวันหยุด)"
+                          value={newSetName}
+                          onChange={(e) => setNewSetName(e.target.value)}
+                          className="px-3 py-2 border rounded-xl text-xs bg-white"
+                          required
+                        />
+                        <input
+                          type="number"
+                          placeholder="งบตั้งต้นทั้งหมด (บาท)"
+                          value={newSetTotal}
+                          onChange={(e) => setNewSetTotal(e.target.value)}
+                          className="px-3 py-2 border rounded-xl text-xs bg-white"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-bold text-gray-600 block">จัดสรรงบแยกตามหมวดหมู่:</label>
+                        <div className="space-y-2">
+                          {EXPENSE_CATEGORIES.map((cat) => (
+                            <div key={cat.key} className="flex items-center gap-2 bg-white p-2.5 rounded-2xl border border-gray-100 shadow-sm">
+                              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                              {cat.key === "other_exp" ? (
+                                <input
+                                  type="text"
+                                  placeholder="ตั้งชื่อเอง (แทนคำว่าอื่นๆ)"
+                                  value={setCustomLabels[cat.key] || ""}
+                                  onChange={(e) => setSetCustomLabels({ ...setCustomLabels, [cat.key]: e.target.value })}
+                                  className="flex-1 px-2 py-1 border rounded-lg text-xs bg-gray-50 text-gray-800 font-medium"
+                                />
+                              ) : (
+                                <span className="text-xs text-gray-700 font-medium flex-1 truncate">{cat.label}</span>
+                              )}
+                              <input
+                                type="number"
+                                placeholder="0"
+                                value={setAllocations[cat.key] || ""}
+                                onChange={(e) => setSetAllocations({ ...setAllocations, [cat.key]: e.target.value })}
+                                className="w-24 px-2.5 py-1.5 border rounded-xl text-xs bg-gray-50 text-right font-bold"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-1 text-xs font-bold text-gray-600 px-1">
+                        <span>จัดสรรแล้ว: {formatMoney(newSetTotalAllocated)} / {formatMoney(newSetTotal)} บ.</span>
+                        <span className={newSetRemaining < 0 ? "text-rose-600" : "text-emerald-600"}>
+                          เหลือสำรอง: {formatMoney(newSetRemaining)} บ.
+                        </span>
+                      </div>
+
+                      <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold hover:bg-black transition shadow-sm">
+                        💾 บันทึกเซ็ตแผนการเงินนี้
+                      </button>
+                    </form>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
