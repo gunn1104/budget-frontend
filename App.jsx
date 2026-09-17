@@ -1,5 +1,16 @@
 const { useState, useEffect, useRef } = React;
 
+// 1. นำเข้า Firebase SDK ผ่าน CDN window
+const firebaseConfig = {
+  apiKey: "AIzaSyBo04M6atVIJe2wc7prBS6N6y...", // ใช้ Config เดิมของโปรเจกต์คุณ
+  authDomain: "budget-planner-app-b6620.firebaseapp.com",
+  databaseURL: "https://budget-planner-app-b6620-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "budget-planner-app-b6620",
+  storageBucket: "budget-planner-app-b6620.appspot.com",
+  messagingSenderId: "104816758240",
+  appId: "1:104816758240:web:3ee5fc818719c"
+};
+
 const EXPENSE_CATEGORIES = [
   { key: "food", label: "อาหาร/เครื่องดื่ม", color: "#EF4444" },
   { key: "transport", label: "เดินทาง/น้ำมัน", color: "#F59E0B" },
@@ -92,7 +103,16 @@ function resizeImage(file, maxDim = 1024) {
 }
 
 function App() {
-  // Sidebar Menu Drawer
+  // Device Unique ID
+  const [deviceId] = useState(() => {
+    let id = localStorage.getItem("bp_deviceId");
+    if (!id) {
+      id = "user_" + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem("bp_deviceId", id);
+    }
+    return id;
+  });
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Profile State
@@ -100,7 +120,7 @@ function App() {
   const [userAvatar, setUserAvatar] = useState(() => localStorage.getItem("bp_userAvatar") || "");
   const [tempUserName, setTempUserName] = useState("");
 
-  // Modals
+  // Modals & Admin State
   const [showPrivacyNotice, setShowPrivacyNotice] = useState(() => !localStorage.getItem("bp_privacyAccepted"));
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -110,12 +130,10 @@ function App() {
 
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportText, setReportText] = useState("");
-  const [reports, setReports] = useState(() => {
-    const saved = localStorage.getItem("bp_reports");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [reports, setReports] = useState([]);
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
-  // Data States
+  // Core App Data
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem("bp_transactions");
     return saved ? JSON.parse(saved) : [];
@@ -126,7 +144,6 @@ function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Debt & Loans State (เจ้าหนี้, ลูกหนี้, รายการเบิก)
   const [debts, setDebts] = useState(() => {
     const saved = localStorage.getItem("bp_debts");
     return saved ? JSON.parse(saved) : [];
@@ -137,7 +154,7 @@ function App() {
     return saved ? JSON.parse(saved) : { bank: 0, cash: 0 };
   });
 
-  // Form Inputs
+  // Inputs
   const [type, setType] = useState("expense");
   const [account, setAccount] = useState("bank");
   const [amount, setAmount] = useState("");
@@ -145,26 +162,58 @@ function App() {
   const [date, setDate] = useState(todayStr());
   const [note, setNote] = useState("");
 
-  // Goal Form State
   const [goalName, setGoalName] = useState("");
   const [goalTarget, setGoalTarget] = useState("");
 
-  // Debt/Loan Form State
-  const [debtType, setDebtType] = useState("creditor"); // "creditor" (เจ้าหนี้), "debtor" (ลูกหนี้/ใครติดเรา), "reimburse" (รายการเบิก)
+  const [debtType, setDebtType] = useState("creditor");
   const [debtNote, setDebtNote] = useState("");
   const [debtAmount, setDebtAmount] = useState("");
   const [debtPerson, setDebtPerson] = useState("");
   const [debtDueDate, setDebtDueDate] = useState("");
 
-  // Adjustment Inputs
   const [bankRealInput, setBankRealInput] = useState("");
   const [cashRealInput, setCashRealInput] = useState("");
 
-  // Slip Scanner
+  // Scanner State
   const [scanning, setScanning] = useState(false);
-  const [scanStatus, setScanStatus] = useState("");
+  const [queueStatus, setQueueStatus] = useState({ current: 0, total: 0, successCount: 0 });
+  const [scanMessage, setScanMessage] = useState("");
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
+
+  // Calculations
+  const calcBankTotal =
+    transactions.reduce(
+      (acc, t) => (t.account === "bank" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
+      0
+    ) + accountAdjustments.bank;
+
+  const calcCashTotal =
+    transactions.reduce(
+      (acc, t) => (t.account === "cash" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
+      0
+    ) + accountAdjustments.cash;
+
+  const totalIncome = transactions
+    .filter((t) => t.type === "income")
+    .reduce((acc, t) => acc + t.amount, 0);
+
+  const totalExpense = transactions
+    .filter((t) => t.type === "expense")
+    .reduce((acc, t) => acc + t.amount, 0);
+
+  const totalBalance = calcBankTotal + calcCashTotal;
+
+  const totalCreditor = debts.filter((d) => d.type === "creditor").reduce((acc, d) => acc + d.amount, 0);
+  const totalDebtor = debts.filter((d) => d.type === "debtor").reduce((acc, d) => acc + d.amount, 0);
+  const totalReimburse = debts.filter((d) => d.type === "reimburse").reduce((acc, d) => acc + d.amount, 0);
+
+  const categoryExpenses = EXPENSE_CATEGORIES.map((cat) => {
+    const sum = transactions
+      .filter((t) => t.type === "expense" && t.category === cat.key)
+      .reduce((acc, t) => acc + t.amount, 0);
+    return { ...cat, sum };
+  }).filter((c) => c.sum > 0);
 
   // Sync LocalStorage
   useEffect(() => localStorage.setItem("bp_userName", userName), [userName]);
@@ -173,7 +222,59 @@ function App() {
   useEffect(() => localStorage.setItem("bp_savingsGoals", JSON.stringify(savingsGoals)), [savingsGoals]);
   useEffect(() => localStorage.setItem("bp_debts", JSON.stringify(debts)), [debts]);
   useEffect(() => localStorage.setItem("bp_accountAdjustments", JSON.stringify(accountAdjustments)), [accountAdjustments]);
-  useEffect(() => localStorage.setItem("bp_reports", JSON.stringify(reports)), [reports]);
+
+  // Firebase Synchronization Effect (ซิงก์สถานะผู้ใช้และดึงรายงาน)
+  useEffect(() => {
+    const syncUserData = async () => {
+      try {
+        const payload = {
+          deviceId,
+          userName: userName || "ผู้ใช้ทั่วไป",
+          avatar: userAvatar || "",
+          balance: totalBalance,
+          lastActive: new Date().toLocaleString("th-TH"),
+        };
+        await fetch(`${firebaseConfig.databaseURL}/users/${deviceId}.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch (err) {
+        console.error("Firebase User Sync Error:", err);
+      }
+    };
+
+    if (userName) syncUserData();
+  }, [userName, userAvatar, totalBalance, deviceId]);
+
+  // ดึงข้อมูล Real-time สำหรับ Admin Dashboard
+  useEffect(() => {
+    if (!isAdminLoggedIn) return;
+
+    const fetchAdminData = async () => {
+      try {
+        // ดึงผู้ใช้งานทั้งหมด
+        const userRes = await fetch(`${firebaseConfig.databaseURL}/users.json`);
+        const userData = await userRes.json();
+        if (userData) {
+          setOnlineUsers(Object.values(userData));
+        }
+
+        // ดึงรายการแจ้งปัญหาทั้งหมด
+        const reportRes = await fetch(`${firebaseConfig.databaseURL}/reports.json`);
+        const reportData = await reportRes.json();
+        if (reportData) {
+          setReports(Object.values(reportData).reverse());
+        }
+      } catch (err) {
+        console.error("Firebase Admin Fetch Error:", err);
+      }
+    };
+
+    fetchAdminData();
+    const interval = setInterval(fetchAdminData, 4000); // ดึงข้อมูลอัปเดตใหม่ทุก 4 วินาที
+    return () => clearInterval(interval);
+  }, [isAdminLoggedIn]);
 
   const acceptPrivacy = () => {
     localStorage.setItem("bp_privacyAccepted", "true");
@@ -196,70 +297,99 @@ function App() {
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
-    if (adminUsername === "Admin" && adminPassword === "27112547") {
+    if (adminUsername.trim() === "Admin" && adminPassword.trim() === "27112547") {
       setIsAdminLoggedIn(true);
       setShowAdminLogin(false);
       setAdminLoginError("");
       setAdminUsername("");
       setAdminPassword("");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
       setAdminLoginError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
     }
   };
 
-  const handleSendReport = (e) => {
+  const handleSendReport = async (e) => {
     e.preventDefault();
     if (!reportText.trim()) return;
-    const newReport = {
+
+    const reportPayload = {
       id: Date.now().toString(),
       userName: userName || "ผู้ใช้ทั่วไป",
       text: reportText.trim(),
       date: new Date().toLocaleString("th-TH"),
     };
-    setReports((prev) => [newReport, ...prev]);
-    setReportText("");
-    setShowReportModal(false);
-    alert("ส่งรายงานปัญหาเรียบร้อยแล้ว");
+
+    try {
+      await fetch(`${firebaseConfig.databaseURL}/reports/${reportPayload.id}.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reportPayload),
+      });
+      setReportText("");
+      setShowReportModal(false);
+      alert("ส่งรายงานปัญหาถึงผู้ดูแลระบบเรียบร้อยแล้ว ขอบคุณครับ");
+    } catch (err) {
+      console.error(err);
+      alert("ไม่สามารถส่งรายงานได้ กรุณาลองใหม่อีกครั้ง");
+    }
   };
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     setScanning(true);
-    setScanStatus("กำลังอ่านข้อมูลจากสลิปด้วย AI...");
+    setScanMessage("");
+    setQueueStatus({ current: 0, total: files.length, successCount: 0 });
 
-    try {
-      const { base64Data, mediaType } = await resizeImage(file);
-      const res = await fetch(`${API_BASE_URL}/api/parse-slip`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64Data, mediaType }),
-      });
+    let successCount = 0;
+    const newTxList = [];
 
-      if (!res.ok) throw new Error("Server error");
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setQueueStatus({ current: i + 1, total: files.length, successCount });
 
-      const data = await res.json();
-      if (data.amount) setAmount(String(data.amount));
-      if (data.date) setDate(data.date);
-      if (data.note) setNote(data.note);
+      try {
+        const { base64Data, mediaType } = await resizeImage(file);
+        const res = await fetch(`${API_BASE_URL}/api/parse-slip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ base64Data, mediaType }),
+        });
 
-      setType("expense");
-      setAccount("bank");
-      setScanStatus("อ่านข้อมูลสลิปสำเร็จ!");
-    } catch (err) {
-      console.error(err);
-      setScanStatus("อ่านสลิปไม่สำเร็จ กรุณากรอกข้อมูลด้วยตนเอง");
-    } finally {
-      setScanning(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+        if (res.ok) {
+          const data = await res.json();
+          if (data.amount && Number(data.amount) > 0) {
+            successCount++;
+            newTxList.push({
+              id: (Date.now() + i).toString(),
+              type: "expense",
+              account: "bank",
+              amount: Number(data.amount),
+              category: "food",
+              date: data.date || todayStr(),
+              note: data.note || "นำเข้าจากสลิป",
+            });
+          }
+        }
+      } catch (err) {
+        console.error(`Error processing file ${i + 1}:`, err);
+      }
     }
+
+    if (newTxList.length > 0) {
+      setTransactions((prev) => [...newTxList, ...prev]);
+    }
+
+    setScanning(false);
+    setScanMessage(`สแกนเสร็จสิ้น! สำเร็จ ${successCount} จาก ${files.length} ใบ`);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleAddTransaction = (e) => {
     e.preventDefault();
     if (!amount || Number(amount) <= 0) return;
-
     const newTx = {
       id: Date.now().toString(),
       type,
@@ -269,7 +399,6 @@ function App() {
       date,
       note,
     };
-
     setTransactions((prev) => [newTx, ...prev]);
     setAmount("");
     setNote("");
@@ -328,44 +457,9 @@ function App() {
     setCashRealInput("");
   };
 
-  // Totals Calculation
-  const calcBankTotal =
-    transactions.reduce(
-      (acc, t) => (t.account === "bank" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    ) + accountAdjustments.bank;
-
-  const calcCashTotal =
-    transactions.reduce(
-      (acc, t) => (t.account === "cash" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    ) + accountAdjustments.cash;
-
-  const totalIncome = transactions
-    .filter((t) => t.type === "income")
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const totalExpense = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const totalBalance = calcBankTotal + calcCashTotal;
-
-  // H หนี้สินและลูกหนี้
-  const totalCreditor = debts.filter((d) => d.type === "creditor").reduce((acc, d) => acc + d.amount, 0);
-  const totalDebtor = debts.filter((d) => d.type === "debtor").reduce((acc, d) => acc + d.amount, 0);
-  const totalReimburse = debts.filter((d) => d.type === "reimburse").reduce((acc, d) => acc + d.amount, 0);
-
-  const categoryExpenses = EXPENSE_CATEGORIES.map((cat) => {
-    const sum = transactions
-      .filter((t) => t.type === "expense" && t.category === cat.key)
-      .reduce((acc, t) => acc + t.amount, 0);
-    return { ...cat, sum };
-  }).filter((c) => c.sum > 0);
-
   return (
     <div className="min-h-screen bg-[#F7F5EF] text-[#2C2C2C] font-sans pb-12">
-      {/* ☰ Side Menu Drawer (ซ่อนเมนูที่ไม่จำเป็นไว้ข้างๆ) */}
+      {/* ☰ Side Menu Drawer */}
       {isMenuOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex">
           <div className="w-4/5 max-w-sm bg-white h-full p-6 space-y-6 shadow-2xl overflow-y-auto">
@@ -376,9 +470,7 @@ function App() {
               </button>
             </div>
 
-            {/* เครื่องมือพิเศษ */}
             <div className="space-y-4">
-              {/* ปรับยอดให้ตรงกับบัญชีจริง */}
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-3">
                 <h3 className="text-xs font-bold text-gray-700">⚖️ ปรับยอดให้ตรงกับบัญชีจริง</h3>
                 <div className="space-y-2 text-xs">
@@ -415,7 +507,6 @@ function App() {
                 </div>
               </div>
 
-              {/* เป้าหมายการออม */}
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-3">
                 <h3 className="text-xs font-bold text-gray-700">🎯 เป้าหมายการออม</h3>
                 {savingsGoals.length === 0 ? (
@@ -453,7 +544,6 @@ function App() {
                 </form>
               </div>
 
-              {/* ปุ่มนโยบายและแจ้งปัญหา */}
               <div className="pt-4 border-t space-y-2">
                 <button
                   onClick={() => {
@@ -479,14 +569,14 @@ function App() {
         </div>
       )}
 
-      {/* Modals ต่างๆ */}
+      {/* Modals */}
       {showPrivacyNotice && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl space-y-4">
             <h3 className="text-lg font-bold text-[#1E1E1E]">การเก็บข้อมูลของคุณ</h3>
             <p className="text-xs text-[#555] leading-relaxed">
-              แอปนี้จะเก็บข้อมูลรายรับ-รายจ่าย รายการเจ้าหนี้/ลูกหนี้ และสลิปโอนเงินไว้ในเบราว์เซอร์ของคุณ
-              ข้อมูลรูปสลิปจะถูกส่งให้ AI ประมวลผลและอ่านยอดเงินอย่างถูกต้อง
+              แอปนี้ซิงก์ข้อมูลผู้ใช้และรายงานปัญหากับ Cloud Database (Firebase)
+              ข้อมูลสลิปและเงินคงเหลือของคุณจะถูกประมวลผลเพื่อแสดงผลในระบบอย่างปลอดภัย
             </p>
             <button onClick={acceptPrivacy} className="w-full bg-[#1B5E20] text-white py-3 rounded-2xl text-sm font-semibold">
               รับทราบและปิด
@@ -498,28 +588,34 @@ function App() {
       {showAdminLogin && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-xl space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center border-b pb-2">
               <h3 className="text-base font-bold text-[#1E1E1E]">เข้าสู่ระบบผู้ดูแลระบบ</h3>
               <button onClick={() => setShowAdminLogin(false)} className="text-gray-400 text-lg">✕</button>
             </div>
             <form onSubmit={handleAdminLogin} className="space-y-3">
-              <input
-                type="text"
-                placeholder="Username"
-                value={adminUsername}
-                onChange={(e) => setAdminUsername(e.target.value)}
-                className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-50"
-                required
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-50"
-                required
-              />
-              {adminLoginError && <p className="text-xs text-rose-600">{adminLoginError}</p>}
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">ชื่อผู้ใช้ (Username)</label>
+                <input
+                  type="text"
+                  placeholder="Admin"
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-50"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">รหัสผ่าน (Password)</label>
+                <input
+                  type="password"
+                  placeholder="27112547"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-50"
+                  required
+                />
+              </div>
+              {adminLoginError && <p className="text-xs text-rose-600 font-medium">{adminLoginError}</p>}
               <button type="submit" className="w-full bg-[#1E1E1E] text-white py-2.5 rounded-xl text-sm font-semibold">
                 เข้าสู่ระบบ
               </button>
@@ -545,16 +641,16 @@ function App() {
                 required
               />
               <button type="submit" className="w-full bg-[#9E2A2B] text-white py-2.5 rounded-xl text-sm font-semibold">
-                ส่งรายงาน
+                ส่งรายงานไปยัง Admin
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Main Header Container */}
+      {/* Main Container */}
       <div className="max-w-5xl mx-auto px-4 pt-6 space-y-4">
-        {/* Top Navbar */}
+        {/* Navbar */}
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
             <button
@@ -569,37 +665,83 @@ function App() {
           <button
             onClick={() => (isAdminLoggedIn ? setIsAdminLoggedIn(false) : setShowAdminLogin(true))}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-              isAdminLoggedIn ? "bg-[#1E1E1E] text-white" : "bg-white text-gray-600 border-gray-200"
+              isAdminLoggedIn ? "bg-[#1E1E1E] text-white border-[#1E1E1E]" : "bg-white text-gray-600 border-gray-200"
             }`}
           >
-            🛡️ {isAdminLoggedIn ? "ผู้ดูแลระบบ (Admin)" : "ผู้ดูแลระบบ"}
+            🛡️ {isAdminLoggedIn ? "ออกจากระบบ Admin" : "ผู้ดูแลระบบ"}
           </button>
         </div>
 
-        {/* Admin Dashboard */}
+        {/* Admin Real-time Dashboard (แสดงผู้ใช้งานจริง & ยอดเงินสดๆ จาก Cloud) */}
         {isAdminLoggedIn && (
-          <div className="bg-[#FFFDF6] border border-[#EADBBD] rounded-3xl p-5 space-y-3">
-            <h3 className="text-xs font-bold text-[#8C6D23]">🛡️ มุมมองผู้ดูแลระบบ</h3>
-            <div className="text-xs space-y-1 text-gray-600">
-              <p>• ชื่อผู้ใช้ปัจจุบัน: <strong>{userName || "ยังไม่ตั้งชื่อ"}</strong></p>
-              <p>• รายการแจ้งปัญหาค้างอยู่: <strong>{reports.length} รายการ</strong></p>
+          <div className="bg-[#FFFDF6] border-2 border-[#EADBBD] rounded-3xl p-5 space-y-4 shadow-md">
+            <div className="flex justify-between items-center border-b border-[#EADBBD] pb-2">
+              <h3 className="text-sm font-bold text-[#8C6D23] flex items-center gap-2">
+                <span>🛡️</span> ระบบหลังบ้านผู้ดูแลระบบ (Firebase Cloud Dashboard)
+              </h3>
+              <span className="text-[10px] bg-emerald-500 text-white px-2.5 py-0.5 rounded-full font-bold animate-pulse">
+                REAL-TIME ONLINE
+              </span>
             </div>
-            {reports.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-[#EADBBD]">
-                {reports.map((r) => (
-                  <div key={r.id} className="bg-white p-2.5 rounded-xl border text-xs">
-                    <span className="font-bold">{r.userName}:</span> {r.text}
-                  </div>
-                ))}
-              </div>
-            )}
+
+            {/* รายชื่อผู้ใช้งานในระบบ */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                <span>👥</span> รายชื่อผู้ใช้งานในระบบทั้งหมด ({onlineUsers.length} คน)
+              </h4>
+              
+              {onlineUsers.length === 0 ? (
+                <p className="text-xs text-gray-400">ยังไม่มีข้อมูลผู้ใช้งานซิงก์เข้ามา</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                  {onlineUsers.map((u, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-2xl border border-gray-200 shadow-sm text-xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-600 overflow-hidden border">
+                          {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.userName.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-800">{u.userName}</p>
+                          <p className="text-[10px] text-gray-400">เข้าล่าสุด: {u.lastActive}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-gray-400">เงินคงเหลือ</p>
+                        <p className="font-extrabold text-emerald-600">{formatMoney(u.balance)} บ.</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* รายงานปัญหาที่ถูกส่งเข้ามา */}
+            <div className="space-y-2 pt-3 border-t border-[#EADBBD]">
+              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                <span>📋</span> รายการแจ้งปัญหาจากผู้ใช้ Real-time ({reports.length} รายการ)
+              </h4>
+              {reports.length > 0 ? (
+                <div className="max-h-40 overflow-y-auto space-y-2">
+                  {reports.map((r) => (
+                    <div key={r.id} className="bg-white p-3 rounded-2xl border border-rose-100 text-xs shadow-sm">
+                      <div className="flex justify-between text-gray-400 text-[10px] mb-1">
+                        <span className="font-bold text-rose-600">👤 {r.userName}</span>
+                        <span>{r.date}</span>
+                      </div>
+                      <p className="text-gray-800 font-medium">{r.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-400">ยังไม่มีรายการแจ้งปัญหาในขณะนี้</p>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Layout Grid สำหรับคอมพิวเตอร์ (PC Dual Column View) */}
+        {/* PC / Mobile Dual Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* ฝั่งซ้าย (Left Column) */}
+          {/* Left Column */}
           <div className="lg:col-span-5 space-y-4">
             {/* โปรไฟล์ */}
             <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
@@ -738,28 +880,61 @@ function App() {
             </div>
           </div>
 
-          {/* ฝั่งขวา (Right Column) */}
+          {/* Right Column */}
           <div className="lg:col-span-7 space-y-4">
-            {/* สแกนสลิปโอนเงิน */}
+            {/* สแกนสลิปแบบ Batch + Queue Display */}
             <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน</h2>
+              <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน (สแกนหลายรูปพร้อมกัน)</h2>
+              
               <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-gray-200 rounded-2xl p-5 text-center bg-gray-50 hover:bg-gray-100 transition cursor-pointer space-y-1"
+                onClick={() => !scanning && fileInputRef.current?.click()}
+                className={`border-2 border-dashed border-gray-200 rounded-2xl p-5 text-center transition cursor-pointer space-y-1 ${
+                  scanning ? "bg-gray-100 opacity-60 cursor-not-allowed" : "bg-gray-50 hover:bg-gray-100"
+                }`}
               >
                 <div className="text-2xl">🖼️</div>
-                <p className="text-xs font-bold text-gray-700">เลือกรูปสลิป</p>
-                <p className="text-[11px] text-gray-400">ระบบอ่านยอดเงินและวันที่ให้อัตโนมัติด้วย AI</p>
-                <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleFileUpload} disabled={scanning} />
+                <p className="text-xs font-bold text-gray-700">เลือกรูปสลิป (เลือกหลายรูปพร้อมกันได้)</p>
+                <p className="text-[11px] text-gray-400">ระบบจะอ่านสลิปทีละรูปและบันทึกคิวให้อัตโนมัติ</p>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  disabled={scanning}
+                />
               </div>
-              {scanStatus && <p className="text-xs text-center font-medium text-emerald-600">{scanStatus}</p>}
+
+              {scanning && (
+                <div className="bg-[#FFFDF6] border border-[#EADBBD] p-3.5 rounded-2xl space-y-2">
+                  <div className="flex justify-between text-xs font-bold text-[#8C6D23]">
+                    <span>⏳ กำลังประมวลผลคิวสลิป...</span>
+                    <span>ใบที่ {queueStatus.current} / {queueStatus.total}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-[#1B5E20] h-full transition-all duration-300"
+                      style={{ width: `${(queueStatus.current / queueStatus.total) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-500 text-center">
+                    สำเร็จแล้ว {queueStatus.successCount} ใบ กรุณารอสักครู่...
+                  </p>
+                </div>
+              )}
+
+              {scanMessage && (
+                <p className="text-xs text-center font-bold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+                  {scanMessage}
+                </p>
+              )}
             </div>
 
-            {/* หนี้สิน, เจ้าหนี้, ลูกหนี้ และรายการเบิก */}
+            {/* เจ้าหนี้ / ลูกหนี้ / รายการเบิก */}
             <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
               <h2 className="text-sm font-bold text-[#1E1E1E]">เจ้าหนี้ / ลูกหนี้ / รายการเบิก</h2>
 
-              {/* การ์ดสรุป 3 ช่อง */}
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
                 <div className="bg-rose-50 p-2.5 rounded-2xl border border-rose-100">
                   <p className="text-rose-600 font-medium text-[11px]">เจ้าหนี้ (เราติด)</p>
@@ -775,7 +950,6 @@ function App() {
                 </div>
               </div>
 
-              {/* ฟอร์มเพิ่มหนี้สิน/ลูกหนี้ */}
               <form onSubmit={handleAddDebt} className="space-y-2 pt-1">
                 <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-xl text-[11px]">
                   <button
@@ -840,7 +1014,6 @@ function App() {
                 </button>
               </form>
 
-              {/* รายการแสดงผล */}
               {debts.length > 0 && (
                 <div className="space-y-2 pt-2 border-t">
                   {debts.map((d) => (
@@ -864,7 +1037,7 @@ function App() {
               )}
             </div>
 
-            {/* สัดส่วนการใช้จ่ายตามหมวดหมู่ */}
+            {/* ใช้จ่ายตามหมวดหมู่ */}
             <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
               <h2 className="text-sm font-bold text-[#1E1E1E]">ใช้จ่ายตามหมวดหมู่</h2>
               {categoryExpenses.length === 0 ? (
