@@ -112,7 +112,7 @@ function resizeImage(file, maxDim = 1024) {
   });
 }
 
-export default function BudgetPlanner() {
+export default function App() {
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem("bp_transactions");
     return saved ? JSON.parse(saved) : [];
