@@ -117,6 +117,12 @@ function App() {
   const [goalToDeposit, setGoalToDeposit] = useState(null);
   const [depositAmount, setDepositAmount] = useState("");
 
+  // State สำหรับแก้ไขเป้าหมายการออม
+  const [goalToEdit, setGoalToEdit] = useState(null);
+  const [editGoalName, setEditGoalName] = useState("");
+  const [editGoalTarget, setEditGoalTarget] = useState("");
+  const [editGoalCurrent, setEditGoalCurrent] = useState("");
+
   // Budget Sets State
   const [budgetSets, setBudgetSets] = useState(() => {
     const saved = localStorage.getItem("bp_budgetSets");
@@ -205,7 +211,7 @@ function App() {
 
   // ล็อคไม่ให้หน้าจอหลักข้างหลังเลื่อนเวลาเปิด Modal
   useEffect(() => {
-    if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || itemToDelete) {
+    if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || goalToEdit || itemToDelete) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "auto";
@@ -213,7 +219,7 @@ function App() {
     return () => {
       document.body.style.overflow = "auto";
     };
-  }, [activeModal, isMenuOpen, showPrivacyNotice, showAdminLogin, showReportModal, goalToDeposit, itemToDelete]);
+  }, [activeModal, isMenuOpen, showPrivacyNotice, showAdminLogin, showReportModal, goalToDeposit, goalToEdit, itemToDelete]);
 
   const calcBankTotal =
     transactions.reduce(
@@ -346,6 +352,29 @@ function App() {
     setDepositAmount("");
   };
 
+  // ฟังก์ชันบันทึกการแก้ไขเป้าหมายการออม
+  const handleUpdateGoal = (e) => {
+    e.preventDefault();
+    if (!goalToEdit || !editGoalName || !editGoalTarget || Number(editGoalTarget) <= 0) return;
+    setSavingsGoals((prev) =>
+      prev.map((g) => {
+        if (g.id === goalToEdit.id) {
+          return {
+            ...g,
+            name: editGoalName.trim(),
+            target: Number(editGoalTarget),
+            current: Number(editGoalCurrent) || 0,
+          };
+        }
+        return g;
+      })
+    );
+    setGoalToEdit(null);
+    setEditGoalName("");
+    setEditGoalTarget("");
+    setEditGoalCurrent("");
+  };
+
   const handleSaveNewBudgetSet = (e) => {
     e.preventDefault();
     if (!newSetName || !newSetTotal || Number(newSetTotal) <= 0) return;
@@ -423,7 +452,6 @@ function App() {
     }
   };
 
-  // 🖼️ ฟังก์ชันสแกนสลิปทีละ 1 รูป
   const handleSingleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -676,6 +704,55 @@ function App() {
               </div>
               <button type="submit" className="w-full bg-[#1B5E20] text-white py-2.5 rounded-xl text-xs font-bold">
                 ยืนยันการเติมเงิน
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ✏️ Modal แก้ไขเป้าหมายการออม */}
+      {goalToEdit && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-base font-bold text-gray-800">✏️ แก้ไขเป้าหมายการออม</h3>
+              <button onClick={() => setGoalToEdit(null)} className="text-gray-400 text-lg font-bold">✕</button>
+            </div>
+            <form onSubmit={handleUpdateGoal} className="space-y-3 text-xs">
+              <div>
+                <label className="text-gray-500 block mb-1">ชื่อเป้าหมาย</label>
+                <input
+                  type="text"
+                  value={editGoalName}
+                  onChange={(e) => setEditGoalName(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-gray-500 block mb-1">ยอดเป้าหมาย (บาท)</label>
+                  <input
+                    type="number"
+                    value={editGoalTarget}
+                    onChange={(e) => setEditGoalTarget(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-500 block mb-1">ยอดสะสมปัจจุบัน (บาท)</label>
+                  <input
+                    type="number"
+                    value={editGoalCurrent}
+                    onChange={(e) => setEditGoalCurrent(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold"
+                    required
+                  />
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-xl font-bold">
+                💾 บันทึกการแก้ไข
               </button>
             </form>
           </div>
@@ -1217,6 +1294,17 @@ function App() {
                         <span className="font-bold text-sm text-gray-800">{g.name}</span>
                         <div className="flex items-center gap-2">
                           <button
+                            onClick={() => {
+                              setGoalToEdit(g);
+                              setEditGoalName(g.name);
+                              setEditGoalTarget(g.target);
+                              setEditGoalCurrent(g.current || 0);
+                            }}
+                            className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1 rounded-xl text-[10px] font-bold"
+                          >
+                            ✏️ แก้ไข
+                          </button>
+                          <button
                             onClick={() => setGoalToDeposit(g)}
                             className="bg-emerald-600 text-white px-2.5 py-1 rounded-xl text-[10px] font-bold"
                           >
@@ -1657,10 +1745,21 @@ function App() {
                       <div key={g.id} className="p-3.5 bg-gray-50 rounded-2xl border text-xs space-y-2">
                         <div className="flex justify-between items-center">
                           <span className="font-bold text-gray-900 text-sm">{g.name}</span>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setGoalToEdit(g);
+                                setEditGoalName(g.name);
+                                setEditGoalTarget(g.target);
+                                setEditGoalCurrent(g.current || 0);
+                              }}
+                              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1 rounded-xl text-[10px] font-bold"
+                            >
+                              ✏️ แก้ไข
+                            </button>
                             <button
                               onClick={() => setGoalToDeposit(g)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-xl text-[11px] font-bold shadow-sm transition"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-xl text-[10px] font-bold shadow-sm transition"
                             >
                               + เติมเงิน
                             </button>
