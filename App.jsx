@@ -114,7 +114,7 @@ function App() {
   });
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [activeModal, setActiveModal] = useState(null); // 'transactions', 'categories', 'goals_detail', 'adjust', 'add_tx', 'add_debt'
+  const [activeModal, setActiveModal] = useState(null);
 
   // Profile State
   const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "");
@@ -168,7 +168,7 @@ function App() {
 
   const [goalName, setGoalName] = useState("");
   const [goalTarget, setGoalTarget] = useState("");
-  const [goalCurrent, setGoalCurrent] = useState(""); // เพิ่มยอดสะสมเริ่มต้น
+  const [goalCurrent, setGoalCurrent] = useState("");
 
   const [debtType, setDebtType] = useState("creditor");
   const [debtNote, setDebtNote] = useState("");
@@ -220,7 +220,6 @@ function App() {
     return { ...cat, sum };
   }).filter((c) => c.sum > 0);
 
-  // คำนวณ CSS Conic Gradient สำหรับกราฟวงกลมหน้าหลัก
   const generatePieChartGradient = () => {
     if (totalExpense === 0 || categoryExpenses.length === 0) return "#333 0deg 360deg";
     let cumulativePercent = 0;
@@ -443,6 +442,7 @@ function App() {
     setGoalName("");
     setGoalTarget("");
     setGoalCurrent("");
+    setActiveModal(null);
   };
 
   const handleAddDebt = (e) => {
@@ -662,7 +662,7 @@ function App() {
                 />
               </div>
 
-              <button type="submit" className="w-full bg-[#9E2A2B] text-white py-3 rounded-2xl font-bold text-xs">
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl font-bold text-xs">
                 + บันทึกรายการ
               </button>
             </form>
@@ -744,6 +744,47 @@ function App() {
         </div>
       )}
 
+      {activeModal === "add_goal" && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-base font-bold text-gray-800">🎯 เพิ่มเป้าหมายการออมเงิน</h3>
+              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-lg font-bold">✕</button>
+            </div>
+            <form onSubmit={handleAddGoal} className="space-y-3">
+              <input
+                type="text"
+                placeholder="ชื่อเป้าหมาย (เช่น ซื้อคอม, เที่ยวญี่ปุ่น)"
+                value={goalName}
+                onChange={(e) => setGoalName(e.target.value)}
+                className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50"
+                required
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  placeholder="ยอดเป้าหมาย (บาท)"
+                  value={goalTarget}
+                  onChange={(e) => setGoalTarget(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50"
+                  required
+                />
+                <input
+                  type="number"
+                  placeholder="มีสะสมอยู่แล้ว (บาท)"
+                  value={goalCurrent}
+                  onChange={(e) => setGoalCurrent(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50"
+                />
+              </div>
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-2.5 rounded-xl text-xs font-bold">
+                + บันทึกเป้าหมาย
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {activeModal === "transactions" && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[80vh] flex flex-col">
@@ -789,7 +830,6 @@ function App() {
         </div>
       )}
 
-      {/* 📊 หน้าต่างสรุปใช้จ่ายตามหมวดหมู่แบบละเอียดยิบ (เมนู 3 ขีด) */}
       {activeModal === "categories_detail" && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[85vh] flex flex-col">
@@ -818,7 +858,6 @@ function App() {
                           <span className="text-gray-400 text-[11px] ml-2">({percent}%)</span>
                         </div>
                       </div>
-                      {/* หลอดพลังสัดส่วน */}
                       <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
                         <div
                           className="h-full transition-all duration-500"
@@ -837,7 +876,6 @@ function App() {
         </div>
       )}
 
-      {/* 🎯 หน้าต่างรายละเอียดเป้าหมายการออมแบบจัดเต็ม */}
       {activeModal === "goals_detail" && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[85vh] flex flex-col">
@@ -1135,7 +1173,7 @@ function App() {
               </div>
             </div>
 
-            {/* 🎮 คงเหลือทั้งหมด + กราฟวงกลมแสดงผลแบบคร่าวๆ */}
+            {/* 🎮 คงเหลือทั้งหมด + กราฟวงกลม */}
             <div className="bg-[#1E1E1E] text-white rounded-3xl p-6 shadow-md space-y-5">
               <div>
                 <p className="text-xs text-gray-400">คงเหลือทั้งหมด</p>
@@ -1144,7 +1182,6 @@ function App() {
                 </h2>
               </div>
 
-              {/* ส่วนกราฟวงกลม (แสดงแบบคร่าวๆ สบายตา) */}
               <div className="pt-3 border-t border-gray-800 space-y-3">
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-gray-300 font-bold">📊 สัดส่วนรายจ่ายคร่าวๆ</span>
@@ -1193,8 +1230,81 @@ function App() {
               </div>
             </div>
 
-            {/* 🎯 เป้าหมายการออมเงิน (พร้อมข้อมูลครบถ้วน) */}
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
+            {/* 🎯 ปุ่มกดเปิด Modal เพิ่มข้อมูล (ดีไซน์เรียบ ไม่เด่นเกินไป) */}
+            <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 flex flex-wrap gap-2 justify-center">
+              <button
+                onClick={() => setActiveModal("add_tx")}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition"
+              >
+                ➕ เพิ่มรายรับ/รายจ่าย
+              </button>
+              <button
+                onClick={() => setActiveModal("add_debt")}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition"
+              >
+                🤝 เพิ่มเจ้าหนี้/ลูกหนี้
+              </button>
+              <button
+                onClick={() => setActiveModal("add_goal")}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition"
+              >
+                🎯 เพิ่มเป้าหมายออม
+              </button>
+            </div>
+          </div>
+
+          {/* Right Column (ข้อมูลที่กรอกไว้แล้ว โดดเด่น ชัดเจนที่สุด) */}
+          <div className="lg:col-span-7 space-y-4">
+            
+            {/* 1. 🤝 สรุป เจ้าหนี้ / ลูกหนี้ / รายการเบิก (ขึ้นมาอยู่ข้างบนเป้าหมาย) */}
+            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
+              <h2 className="text-sm font-bold text-[#1E1E1E]">สรุป เจ้าหนี้ / ลูกหนี้ / รายการเบิก</h2>
+
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="bg-rose-50 p-3 rounded-2xl border border-rose-100">
+                  <p className="text-rose-600 font-medium text-[11px]">เจ้าหนี้ (เราติด)</p>
+                  <p className="text-base font-extrabold text-rose-700 mt-1">{formatMoney(totalCreditor)} บ.</p>
+                </div>
+                <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
+                  <p className="text-emerald-600 font-medium text-[11px]">ลูกหนี้ (ใครติดเรา)</p>
+                  <p className="text-base font-extrabold text-emerald-700 mt-1">{formatMoney(totalDebtor)} บ.</p>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100">
+                  <p className="text-blue-600 font-medium text-[11px]">รอเบิกคืน</p>
+                  <p className="text-base font-extrabold text-blue-700 mt-1">{formatMoney(totalReimburse)} บ.</p>
+                </div>
+              </div>
+
+              {debts.length > 0 ? (
+                <div className="space-y-2 pt-2 border-t max-h-48 overflow-y-auto">
+                  {debts.map((d) => (
+                    <div key={d.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl text-xs">
+                      <div>
+                        <span className={`font-bold mr-1.5 ${d.type === "creditor" ? "text-rose-600" : d.type === "debtor" ? "text-emerald-600" : "text-blue-600"}`}>
+                          [{d.type === "creditor" ? "เจ้าหนี้" : d.type === "debtor" ? "ลูกหนี้" : "รอเบิก"}]
+                        </span>
+                        <span className="font-bold text-gray-900">{d.note}</span>
+                        {d.person && <span className="text-gray-500 font-medium"> ({d.person})</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-sm text-gray-900">{formatMoney(d.amount)} บ.</span>
+                        <button
+                          onClick={() => setItemToDelete({ type: "debt", id: d.id })}
+                          className="text-gray-400 hover:text-rose-600 p-1 text-sm"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 text-center py-2">ไม่มีรายการค้างชำระ</p>
+              )}
+            </div>
+
+            {/* 2. 🎯 เป้าหมายการออมเงิน */}
+            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
               <div className="flex justify-between items-center">
                 <h2 className="text-sm font-bold text-[#1E1E1E]">🎯 เป้าหมายการออมเงิน</h2>
                 {savingsGoals.length > 0 && (
@@ -1210,134 +1320,26 @@ function App() {
               {savingsGoals.length === 0 ? (
                 <p className="text-xs text-gray-400">ยังไม่มีเป้าหมายการออมเงิน</p>
               ) : (
-                <div className="space-y-2">
-                  {savingsGoals.slice(0, 2).map((g) => {
+                <div className="space-y-3">
+                  {savingsGoals.map((g) => {
                     const progress = g.target > 0 ? Math.min(100, ((g.current || 0) / g.target) * 100).toFixed(0) : 0;
                     return (
-                      <div key={g.id} className="p-3 bg-gray-50 rounded-2xl border text-xs space-y-1.5">
-                        <div className="flex justify-between font-bold">
+                      <div key={g.id} className="p-3.5 bg-gray-50 rounded-2xl border text-xs space-y-2">
+                        <div className="flex justify-between font-bold text-gray-900 text-sm">
                           <span>{g.name}</span>
-                          <span className="text-emerald-600">{formatMoney(g.target)} บ.</span>
+                          <span className="text-emerald-600 font-extrabold">{formatMoney(g.target)} บ.</span>
                         </div>
-                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                        <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
                           <div className="bg-emerald-600 h-full" style={{ width: `${progress}%` }} />
                         </div>
-                        <div className="flex justify-between text-[10px] text-gray-400">
-                          <span>เก็บได้: {formatMoney(g.current || 0)} บ.</span>
-                          <span>{progress}%</span>
+                        <div className="flex justify-between text-[11px] font-semibold text-gray-600">
+                          <span>เก็บได้แล้ว: <b className="text-emerald-700">{formatMoney(g.current || 0)} บ.</b></span>
+                          <span>สำเร็จ {progress}%</span>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              )}
-
-              <form onSubmit={handleAddGoal} className="space-y-2 pt-2 border-t">
-                <input
-                  type="text"
-                  placeholder="ชื่อเป้าหมาย (เช่น ซื้อคอม, เก็บเงินเที่ยว)"
-                  value={goalName}
-                  onChange={(e) => setGoalName(e.target.value)}
-                  className="w-full px-3 py-1.5 border rounded-xl text-xs bg-gray-50"
-                  required
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    placeholder="ยอดเป้าหมาย (บาท)"
-                    value={goalTarget}
-                    onChange={(e) => setGoalTarget(e.target.value)}
-                    className="w-full px-3 py-1.5 border rounded-xl text-xs bg-gray-50"
-                    required
-                  />
-                  <input
-                    type="number"
-                    placeholder="มีสะสมอยู่แล้ว (ถ้ามี)"
-                    value={goalCurrent}
-                    onChange={(e) => setGoalCurrent(e.target.value)}
-                    className="w-full px-3 py-1.5 border rounded-xl text-xs bg-gray-50"
-                  />
-                </div>
-                <button type="submit" className="w-full bg-[#1B5E20] text-white py-2 rounded-xl text-xs font-bold">
-                  + เพิ่มเป้าหมาย
-                </button>
-              </form>
-            </div>
-
-            {/* ➕ ปุ่มลัดกดเปิด Modal เพิ่มรายการ */}
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">เพิ่มข้อมูลธุรกรรม</h2>
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  onClick={() => setActiveModal("add_tx")}
-                  className="w-full py-3 bg-[#9E2A2B] text-white rounded-2xl text-xs font-bold shadow-sm hover:bg-[#852324] transition flex items-center justify-center gap-2"
-                >
-                  <span>➕</span> เพิ่มรายการรายรับ / รายจ่าย
-                </button>
-                <button
-                  onClick={() => setActiveModal("add_debt")}
-                  className="w-full py-3 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold shadow-sm hover:bg-black transition flex items-center justify-center gap-2"
-                >
-                  <span>🤝</span> เพิ่ม เจ้าหนี้ / ลูกหนี้ / รายการเบิก
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column */}
-          <div className="lg:col-span-7 space-y-4">
-            {/* 🤝 เจ้าหนี้ / ลูกหนี้ / รายการเบิก */}
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
-              <div className="flex justify-between items-center">
-                <h2 className="text-sm font-bold text-[#1E1E1E]">สรุป เจ้าหนี้ / ลูกหนี้ / รายการเบิก</h2>
-                <button
-                  onClick={() => setActiveModal("add_debt")}
-                  className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-xl font-bold"
-                >
-                  + เพิ่ม
-                </button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="bg-rose-50 p-3 rounded-2xl border border-rose-100">
-                  <p className="text-rose-600 font-medium text-[11px]">เจ้าหนี้ (เราติด)</p>
-                  <p className="text-sm font-bold text-rose-700 mt-1">{formatMoney(totalCreditor)} บ.</p>
-                </div>
-                <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
-                  <p className="text-emerald-600 font-medium text-[11px]">ลูกหนี้ (ใครติดเรา)</p>
-                  <p className="text-sm font-bold text-emerald-700 mt-1">{formatMoney(totalDebtor)} บ.</p>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100">
-                  <p className="text-blue-600 font-medium text-[11px]">รอเบิกคืน</p>
-                  <p className="text-sm font-bold text-blue-700 mt-1">{formatMoney(totalReimburse)} บ.</p>
-                </div>
-              </div>
-
-              {debts.length > 0 ? (
-                <div className="space-y-2 pt-2 border-t max-h-48 overflow-y-auto">
-                  {debts.map((d) => (
-                    <div key={d.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl text-xs">
-                      <div>
-                        <span className={`font-bold mr-1.5 ${d.type === "creditor" ? "text-rose-600" : d.type === "debtor" ? "text-emerald-600" : "text-blue-600"}`}>
-                          [{d.type === "creditor" ? "เจ้าหนี้" : d.type === "debtor" ? "ลูกหนี้" : "รอเบิก"}]
-                        </span>
-                        <span className="font-semibold text-gray-800">{d.note}</span>
-                        {d.person && <span className="text-gray-400"> ({d.person})</span>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-800">{formatMoney(d.amount)} บ.</span>
-                        <button
-                          onClick={() => setItemToDelete({ type: "debt", id: d.id })}
-                          className="text-gray-400 hover:text-rose-600 p-1 text-sm"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400 text-center py-2">ไม่มีรายการค้างชำระ</p>
               )}
             </div>
 
