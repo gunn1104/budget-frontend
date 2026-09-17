@@ -114,7 +114,27 @@ function App() {
   });
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [activeModal, setActiveModal] = useState(null);
+  const [activeModal, setActiveModal] = useState(null); // 'transactions', 'categories_detail', 'goals_detail', 'budget_planner', 'adjust', 'add_tx', 'add_debt', 'add_goal'
+  
+  // State สำหรับเติมเงินเป้าหมายออม
+  const [goalToDeposit, setGoalToDeposit] = useState(null);
+  const [depositAmount, setDepositAmount] = useState("");
+
+  // State สำหรับวางแผนการเงิน (Budget Sets)
+  const [budgetSets, setBudgetSets] = useState(() => {
+    const saved = localStorage.getItem("bp_budgetSets");
+    return saved ? JSON.parse(saved) : [
+      { id: "1", name: "Set 1: งบปกติ 700 บาท", totalBudget: 700, items: { food: 300, transport: 200, shopping: 100, other_exp: 100 } }
+    ];
+  });
+  const [activeBudgetSetId, setActiveBudgetSetId] = useState(() => {
+    return localStorage.getItem("bp_activeBudgetSetId") || "1";
+  });
+  
+  // Inputs สำหรับสร้าง/แก้ไข Set แผนการเงิน
+  const [newSetName, setNewSetName] = useState("");
+  const [newSetTotal, setNewSetTotal] = useState("");
+  const [setAllocations, setSetAllocations] = useState({});
 
   // Profile State
   const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "");
@@ -158,7 +178,7 @@ function App() {
     return saved ? JSON.parse(saved) : { bank: 0, cash: 0 };
   });
 
-  // Inputs
+  // Inputs ธุรกรรมทั่วไป
   const [type, setType] = useState("expense");
   const [account, setAccount] = useState("bank");
   const [amount, setAmount] = useState("");
@@ -239,6 +259,8 @@ function App() {
   useEffect(() => localStorage.setItem("bp_savingsGoals", JSON.stringify(savingsGoals)), [savingsGoals]);
   useEffect(() => localStorage.setItem("bp_debts", JSON.stringify(debts)), [debts]);
   useEffect(() => localStorage.setItem("bp_accountAdjustments", JSON.stringify(accountAdjustments)), [accountAdjustments]);
+  useEffect(() => localStorage.setItem("bp_budgetSets", JSON.stringify(budgetSets)), [budgetSets]);
+  useEffect(() => localStorage.setItem("bp_activeBudgetSetId", activeBudgetSetId), [activeBudgetSetId]);
 
   // Firebase User Sync
   useEffect(() => {
@@ -292,8 +314,47 @@ function App() {
       setDebts((prev) => prev.filter((d) => d.id !== itemToDelete.id));
     } else if (itemToDelete.type === "goal") {
       setSavingsGoals((prev) => prev.filter((g) => g.id !== itemToDelete.id));
+    } else if (itemToDelete.type === "budgetSet") {
+      const remaining = budgetSets.filter((s) => s.id !== itemToDelete.id);
+      setBudgetSets(remaining);
+      if (activeBudgetSetId === itemToDelete.id && remaining.length > 0) {
+        setActiveBudgetSetId(remaining[0].id);
+      }
     }
     setItemToDelete(null);
+  };
+
+  const handleDepositGoal = (e) => {
+    e.preventDefault();
+    if (!goalToDeposit || !depositAmount || Number(depositAmount) <= 0) return;
+    setSavingsGoals((prev) =>
+      prev.map((g) => {
+        if (g.id === goalToDeposit.id) {
+          return { ...g, current: (g.current || 0) + Number(depositAmount) };
+        }
+        return g;
+      })
+    );
+    setGoalToDeposit(null);
+    setDepositAmount("");
+  };
+
+  const handleSaveNewBudgetSet = (e) => {
+    e.preventDefault();
+    if (!newSetName || !newSetTotal || Number(newSetTotal) <= 0) return;
+    const newId = Date.now().toString();
+    const newSet = {
+      id: newId,
+      name: newSetName.trim(),
+      totalBudget: Number(newSetTotal),
+      items: { ...setAllocations },
+    };
+    setBudgetSets((prev) => [...prev, newSet]);
+    setActiveBudgetSetId(newId);
+    setNewSetName("");
+    setNewSetTotal("");
+    setSetAllocations({});
+    alert("บันทึกเซ็ตแผนการเงินเรียบร้อยแล้ว!");
   };
 
   const acceptPrivacy = () => {
@@ -488,6 +549,13 @@ function App() {
     setCashRealInput("");
   };
 
+  const activeBudgetSet = budgetSets.find((s) => s.id === activeBudgetSetId) || budgetSets[0];
+  const totalAllocated = activeBudgetSet ? Object.values(activeBudgetSet.items).reduce((a, b) => a + Number(b), 0) : 0;
+  const remainingBudget = activeBudgetSet ? activeBudgetSet.totalBudget - totalAllocated : 0;
+
+  const newSetTotalAllocated = Object.values(setAllocations).reduce((a, b) => a + Number(b), 0);
+  const newSetRemaining = (Number(newSetTotal) || 0) - newSetTotalAllocated;
+
   return (
     <div className="min-h-screen bg-[#F7F5EF] text-[#2C2C2C] font-sans pb-12">
       {/* ☰ Side Menu Drawer */}
@@ -507,6 +575,14 @@ function App() {
                 className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
               >
                 <span>📜 รายการประวัติทั้งหมด ({transactions.length})</span>
+                <span>➔</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveModal("budget_planner"); setIsMenuOpen(false); }}
+                className="w-full flex justify-between items-center p-3.5 bg-emerald-50 hover:bg-emerald-100 rounded-2xl text-xs font-bold text-emerald-800 border border-emerald-200"
+              >
+                <span>🗺️ วางแผนการเงิน / จัดสรรงบ (เซ็ต Set 1, 2...)</span>
                 <span>➔</span>
               </button>
 
@@ -580,7 +656,173 @@ function App() {
         </div>
       )}
 
-      {/* 🪟 Modals ป๊อปอัปต่างๆ */}
+      {/* 🪙 Modal เติมเงินเข้าเป้าหมายการออม */}
+      {goalToDeposit && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="text-base font-bold text-gray-800">💰 เติมเงินออม: {goalToDeposit.name}</h3>
+              <button onClick={() => setGoalToDeposit(null)} className="text-gray-400 text-lg">✕</button>
+            </div>
+            <form onSubmit={handleDepositGoal} className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">จำนวนเงินที่ต้องการออมเพิ่ม (บาท)</label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-50"
+                  required
+                />
+              </div>
+              <button type="submit" className="w-full bg-[#1B5E20] text-white py-2.5 rounded-xl text-xs font-bold">
+                ยืนยันการเติมเงิน
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🗺️ Modal หน้าต่างวางแผนการเงินแยกต่างหากแบบเกมเซ็ต (Set 1, 2, 3) */}
+      {activeModal === "budget_planner" && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div>
+                <h3 className="text-lg font-extrabold text-gray-900">🗺️ ระบบวางแผนการเงิน (Budget Sets)</h3>
+                <p className="text-xs text-gray-500">เลือกหรือสร้างเซ็ตการใช้จ่ายล่วงหน้าตามสถานการณ์ (เช่น งบ 700 บาท)</p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold">✕</button>
+            </div>
+
+            <div className="overflow-y-auto space-y-5 flex-1 pr-1">
+              {/* แถบเลือกเซ็ต (Set Tabs) */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-700 block">🎮 เลือกเซ็ตแผนการเงินที่ใช้งานอยู่:</label>
+                <div className="flex flex-wrap gap-2">
+                  {budgetSets.map((set) => (
+                    <div key={set.id} className="flex items-center">
+                      <button
+                        onClick={() => setActiveBudgetSetId(set.id)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                          activeBudgetSetId === set.id
+                            ? "bg-[#1E1E1E] text-white shadow-md"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        <span>🛡️ {set.name}</span>
+                        <span className="text-[10px] opacity-85">({formatMoney(set.totalBudget)} บ.)</span>
+                      </button>
+                      {budgetSets.length > 1 && (
+                        <button
+                          onClick={() => setItemToDelete({ type: "budgetSet", id: set.id })}
+                          className="text-gray-400 hover:text-rose-600 ml-1.5 text-xs"
+                          title="ลบเซ็ตนี้"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* แสดงรายละเอียดเซ็ตที่เลือก */}
+              {activeBudgetSet && (
+                <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-sm font-bold text-emerald-900">📋 รายละเอียด: {activeBudgetSet.name}</h4>
+                    <span className="text-xs font-extrabold text-emerald-700">งบตั้งต้น: {formatMoney(activeBudgetSet.totalBudget)} บาท</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {EXPENSE_CATEGORIES.map((cat) => {
+                      const allocated = activeBudgetSet.items[cat.key] || 0;
+                      if (allocated === 0) return null;
+                      const percent = activeBudgetSet.totalBudget > 0 ? ((allocated / activeBudgetSet.totalBudget) * 100).toFixed(0) : 0;
+                      return (
+                        <div key={cat.key} className="bg-white p-2.5 rounded-xl border border-emerald-100 flex justify-between items-center text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                            <span className="font-semibold text-gray-800">{cat.label}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-rose-600">{formatMoney(allocated)} บ.</span>
+                            <span className="text-[10px] text-gray-400 ml-1.5">({percent}%)</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-2 border-t border-emerald-200 flex justify-between text-xs font-bold text-gray-700">
+                    <span>จัดสรรรวม: <span className="text-rose-600">{formatMoney(totalAllocated)} บ.</span></span>
+                    <span>เงินเหลือสำรอง/ฉุกเฉิน: <span className="text-emerald-700">{formatMoney(remainingBudget)} บ.</span></span>
+                  </div>
+                </div>
+              )}
+
+              {/* ฟอร์มสร้างเซ็ตใหม่ (Set ใหม่) */}
+              <div className="p-4 bg-gray-50 rounded-2xl border space-y-3">
+                <h4 className="text-xs font-bold text-gray-800">➕ สร้างเซ็ตแผนการเงินใหม่ (เช่น Set 2, Set 3)</h4>
+                <form onSubmit={handleSaveNewBudgetSet} className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="ชื่อเซ็ต (เช่น Set 2: งบวันหยุด)"
+                      value={newSetName}
+                      onChange={(e) => setNewSetName(e.target.value)}
+                      className="px-3 py-2 border rounded-xl text-xs bg-white"
+                      required
+                    />
+                    <input
+                      type="number"
+                      placeholder="งบตั้งต้นทั้งหมด (บาท)"
+                      value={newSetTotal}
+                      onChange={(e) => setNewSetTotal(e.target.value)}
+                      className="px-3 py-2 border rounded-xl text-xs bg-white"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-gray-600 block">จัดสรรงบแยกตามหมวดหมู่:</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {EXPENSE_CATEGORIES.map((cat) => (
+                        <div key={cat.key} className="flex items-center gap-2 bg-white p-2 rounded-xl border">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                          <span className="text-xs text-gray-700 flex-1 truncate">{cat.label}</span>
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={setAllocations[cat.key] || ""}
+                            onChange={(e) => setSetAllocations({ ...setAllocations, [cat.key]: e.target.value })}
+                            className="w-20 px-2 py-1 border rounded-lg text-xs bg-gray-50 text-right"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2 text-xs font-bold">
+                    <span>จัดสรรแล้ว: {formatMoney(newSetTotalAllocated)} / {formatMoney(newSetTotal)} บ.</span>
+                    <span className={newSetRemaining < 0 ? "text-rose-600" : "text-emerald-600"}>
+                      เหลือสำรอง: {formatMoney(newSetRemaining)} บ.
+                    </span>
+                  </div>
+
+                  <button type="submit" className="w-full bg-[#1E1E1E] text-white py-2.5 rounded-xl text-xs font-bold hover:bg-black transition">
+                    💾 บันทึกเซ็ตแผนการเงินนี้
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🪟 Modals อื่นๆ */}
       {activeModal === "add_tx" && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl space-y-4">
@@ -893,12 +1135,20 @@ function App() {
                     <div key={g.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-2 text-xs">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-sm text-gray-800">{g.name}</span>
-                        <button
-                          onClick={() => setItemToDelete({ type: "goal", id: g.id })}
-                          className="text-gray-400 hover:text-rose-600"
-                        >
-                          🗑️ ลบ
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setGoalToDeposit(g)}
+                            className="bg-emerald-600 text-white px-2.5 py-1 rounded-xl text-[10px] font-bold"
+                          >
+                            + เติมเงิน
+                          </button>
+                          <button
+                            onClick={() => setItemToDelete({ type: "goal", id: g.id })}
+                            className="text-gray-400 hover:text-rose-600"
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       </div>
                       <div className="flex justify-between text-gray-500">
                         <span>เก็บได้แล้ว: <b className="text-emerald-600">{formatMoney(g.current || 0)} บ.</b></span>
@@ -1230,7 +1480,7 @@ function App() {
               </div>
             </div>
 
-            {/* 🎯 ปุ่มกดเปิด Modal เพิ่มข้อมูล (ดีไซน์เรียบ ไม่เด่นเกินไป) */}
+            {/* 🎯 ปุ่มกดเปิด Modal เพิ่มข้อมูล */}
             <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 flex flex-wrap gap-2 justify-center">
               <button
                 onClick={() => setActiveModal("add_tx")}
@@ -1253,10 +1503,10 @@ function App() {
             </div>
           </div>
 
-          {/* Right Column (ข้อมูลที่กรอกไว้แล้ว โดดเด่น ชัดเจนที่สุด) */}
+          {/* Right Column */}
           <div className="lg:col-span-7 space-y-4">
             
-            {/* 1. 🤝 สรุป เจ้าหนี้ / ลูกหนี้ / รายการเบิก (ขึ้นมาอยู่ข้างบนเป้าหมาย) */}
+            {/* 1. 🤝 สรุป เจ้าหนี้ / ลูกหนี้ / รายการเบิก */}
             <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
               <h2 className="text-sm font-bold text-[#1E1E1E]">สรุป เจ้าหนี้ / ลูกหนี้ / รายการเบิก</h2>
 
@@ -1325,16 +1575,31 @@ function App() {
                     const progress = g.target > 0 ? Math.min(100, ((g.current || 0) / g.target) * 100).toFixed(0) : 0;
                     return (
                       <div key={g.id} className="p-3.5 bg-gray-50 rounded-2xl border text-xs space-y-2">
-                        <div className="flex justify-between font-bold text-gray-900 text-sm">
-                          <span>{g.name}</span>
-                          <span className="text-emerald-600 font-extrabold">{formatMoney(g.target)} บ.</span>
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-gray-900 text-sm">{g.name}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setGoalToDeposit(g)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-xl text-[11px] font-bold shadow-sm transition"
+                            >
+                              + เติมเงิน
+                            </button>
+                            <button
+                              onClick={() => setItemToDelete({ type: "goal", id: g.id })}
+                              className="text-gray-400 hover:text-rose-600 p-1"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </div>
+
                         <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
-                          <div className="bg-emerald-600 h-full" style={{ width: `${progress}%` }} />
+                          <div className="bg-emerald-600 h-full transition-all" style={{ width: `${progress}%` }} />
                         </div>
+
                         <div className="flex justify-between text-[11px] font-semibold text-gray-600">
-                          <span>เก็บได้แล้ว: <b className="text-emerald-700">{formatMoney(g.current || 0)} บ.</b></span>
-                          <span>สำเร็จ {progress}%</span>
+                          <span>เก็บได้แล้ว: <b className="text-emerald-700">{formatMoney(g.current || 0)} / {formatMoney(g.target)} บ.</b></span>
+                          <span className="text-emerald-600 font-extrabold">สำเร็จ {progress}%</span>
                         </div>
                       </div>
                     );
