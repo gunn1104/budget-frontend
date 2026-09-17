@@ -101,8 +101,6 @@ function resizeImage(file, maxDim = 1024) {
   });
 }
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 function App() {
   const [deviceId] = useState(() => {
     let id = localStorage.getItem("bp_deviceId");
@@ -201,12 +199,11 @@ function App() {
   const [cashRealInput, setCashRealInput] = useState("");
 
   const [scanning, setScanning] = useState(false);
-  const [queueStatus, setQueueStatus] = useState({ current: 0, total: 0, successCount: 0 });
   const [scanMessage, setScanMessage] = useState("");
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // ล็อคไม่ให้หน้าจอหลักข้างหลังเลื่อนได้เวลาเปิด Modal ใดๆ
+  // ล็อคไม่ให้หน้าจอหลักข้างหลังเลื่อนเวลาเปิด Modal
   useEffect(() => {
     if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || itemToDelete) {
       document.body.style.overflow = "hidden";
@@ -426,60 +423,49 @@ function App() {
     }
   };
 
-  const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  // 🖼️ ฟังก์ชันสแกนสลิปทีละ 1 รูป
+  const handleSingleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     setScanning(true);
-    setScanMessage("");
-    setQueueStatus({ current: 0, total: files.length, successCount: 0 });
+    setScanMessage("กำลังอ่านข้อมูลสลิป...");
 
-    let successCount = 0;
-    const newTxList = [];
+    try {
+      const { base64Data, mediaType } = await resizeImage(file);
+      const res = await fetch(`${API_BASE_URL}/api/parse-slip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64Data, mediaType }),
+      });
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      setQueueStatus({ current: i + 1, total: files.length, successCount });
-
-      try {
-        const { base64Data, mediaType } = await resizeImage(file);
-        const res = await fetch(`${API_BASE_URL}/api/parse-slip`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ base64Data, mediaType }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.amount && Number(data.amount) > 0) {
-            successCount++;
-            newTxList.push({
-              id: (Date.now() + i).toString(),
-              type: "expense",
-              account: "bank",
-              amount: Number(data.amount),
-              category: "food",
-              date: data.date || todayStr(),
-              note: data.note || "นำเข้าจากสลิป",
-            });
-          }
+      if (res.ok) {
+        const data = await res.json();
+        if (data.amount && Number(data.amount) > 0) {
+          const newTx = {
+            id: Date.now().toString(),
+            type: "expense",
+            account: "bank",
+            amount: Number(data.amount),
+            category: "food",
+            date: data.date || todayStr(),
+            note: data.note || "นำเข้าจากสลิป",
+          };
+          setTransactions((prev) => [newTx, ...prev]);
+          setScanMessage(`สแกนสำเร็จ! บันทึกรายจ่าย ${formatMoney(data.amount)} บาท เรียบร้อยแล้ว`);
+        } else {
+          setScanMessage("อ่านสลิปสำเร็จ แต่ไม่พบยอดเงิน กรุณาตรวจสอบรูปภาพ");
         }
-      } catch (err) {
-        console.error(`Error processing file ${i + 1}:`, err);
+      } else {
+        setScanMessage("ไม่สามารถประมวลผลสลิปนี้ได้ กรุณาลองใหม่อีกครั้ง");
       }
-
-      if (i < files.length - 1) {
-        await delay(1500);
-      }
+    } catch (err) {
+      console.error("Slip Scan Error:", err);
+      setScanMessage("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } finally {
+      setScanning(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-
-    if (newTxList.length > 0) {
-      setTransactions((prev) => [...newTxList, ...prev]);
-    }
-
-    setScanning(false);
-    setScanMessage(`สแกนเสร็จสิ้น! สำเร็จ ${successCount} จาก ${files.length} ใบ`);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleAddTransaction = (e) => {
@@ -696,12 +682,11 @@ function App() {
         </div>
       )}
 
-      {/* 🗺️ Modal หน้าวางแผนการเงิน (แก้ปัญหา Scroll ทะลุและล็อคหน้าหลัง) */}
+      {/* 🗺️ Modal หน้าวางแผนการเงิน */}
       {activeModal === "budget_planner" && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-hidden">
           <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
             
-            {/* Header (ตรึงติดด้านบน ไม่เลื่อนหนี) */}
             <div className="p-5 border-b flex justify-between items-center bg-white shrink-0">
               <div>
                 <h3 className="text-base sm:text-lg font-extrabold text-gray-900">🗺️ ระบบวางแผนการเงิน (Budget Sets)</h3>
@@ -710,7 +695,6 @@ function App() {
               <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold p-2">✕</button>
             </div>
 
-            {/* Content Body (ให้เลื่อนเฉพาะส่วนนี้เท่านั้น) */}
             <div className="p-5 overflow-y-auto space-y-6 flex-1">
               {budgetSets.length === 0 ? (
                 <div className="space-y-4">
@@ -904,29 +888,15 @@ function App() {
               )}
             </div>
 
-            {/* Footer Button (ตรึงติดด้านล่าง ไม่เลื่อนหลุด) */}
-            {budgetSets.length === 0 && (
-              <div className="p-4 border-t bg-white shrink-0">
-                <button
-                  type="submit"
-                  form="budget-form"
-                  className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold hover:bg-black transition shadow-sm"
-                >
-                  💾 บันทึกเซ็ตแผนการเงินนี้
-                </button>
-              </div>
-            )}
-            {budgetSets.length > 0 && (
-              <div className="p-4 border-t bg-white shrink-0">
-                <button
-                  type="submit"
-                  form="budget-form"
-                  className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold hover:bg-black transition shadow-sm"
-                >
-                  💾 บันทึกเซ็ตแผนการเงินนี้
-                </button>
-              </div>
-            )}
+            <div className="p-4 border-t bg-white shrink-0">
+              <button
+                type="submit"
+                form="budget-form"
+                className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold hover:bg-black transition shadow-sm"
+              >
+                💾 บันทึกเซ็ตแผนการเงินนี้
+              </button>
+            </div>
 
           </div>
         </div>
@@ -1718,9 +1688,9 @@ function App() {
               )}
             </div>
 
-            {/* สแกนสลิปแบบ Batch */}
+            {/* นำเข้าสลิปทีละ 1 รูป */}
             <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน (สแกนหลายรูปพร้อมกัน)</h2>
+              <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน (เลือกทีละ 1 รูป)</h2>
               
               <div
                 onClick={() => !scanning && fileInputRef.current?.click()}
@@ -1729,34 +1699,21 @@ function App() {
                 }`}
               >
                 <div className="text-2xl">🖼️</div>
-                <p className="text-xs font-bold text-gray-700">เลือกรูปสลิป (เลือกหลายรูปพร้อมกันได้)</p>
-                <p className="text-[11px] text-gray-400">ระบบจะอ่านสลิปทีละรูปและบันทึกคิวให้อัตโนมัติ</p>
+                <p className="text-xs font-bold text-gray-700">คลิกเพื่อเลือกรูปสลิป (ทีละ 1 รูป)</p>
+                <p className="text-[11px] text-gray-400">ระบบจะสแกนและบันทึกยอดเงินเข้าบัญชีทันที</p>
                 <input
                   type="file"
                   ref={fileInputRef}
                   accept="image/*"
-                  multiple
                   className="hidden"
-                  onChange={handleFileUpload}
+                  onChange={handleSingleFileUpload}
                   disabled={scanning}
                 />
               </div>
 
               {scanning && (
-                <div className="bg-[#FFFDF6] border border-[#EADBBD] p-3.5 rounded-2xl space-y-2">
-                  <div className="flex justify-between text-xs font-bold text-[#8C6D23]">
-                    <span>⏳ กำลังประมวลผลคิวสลิป...</span>
-                    <span>ใบที่ {queueStatus.current} / {queueStatus.total}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-[#1B5E20] h-full transition-all duration-300"
-                      style={{ width: `${(queueStatus.current / queueStatus.total) * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-gray-500 text-center">
-                    สำเร็จแล้ว {queueStatus.successCount} ใบ กรุณารอสักครู่...
-                  </p>
+                <div className="bg-[#FFFDF6] border border-[#EADBBD] p-3 rounded-2xl text-center">
+                  <p className="text-xs font-bold text-[#8C6D23] animate-pulse">⏳ กำลังสแกนสลิป กรุณารอสักครู่...</p>
                 </div>
               )}
 
