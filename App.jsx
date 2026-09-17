@@ -119,10 +119,16 @@ function App() {
   const [goalToDeposit, setGoalToDeposit] = useState(null);
   const [depositAmount, setDepositAmount] = useState("");
 
-  // Budget Sets State
+  // Budget Sets State (ตั้งค่าเริ่มต้นให้เป็นอาเรย์ว่างโล่งๆ ถ้าไม่มีข้อมูลเก่า)
   const [budgetSets, setBudgetSets] = useState(() => {
     const saved = localStorage.getItem("bp_budgetSets");
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return []; // เริ่มต้นเป็นค่าว่างโล่งๆ
   });
   const [activeBudgetSetId, setActiveBudgetSetId] = useState(() => {
     return localStorage.getItem("bp_activeBudgetSetId") || "";
@@ -630,8 +636,8 @@ function App() {
             <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-xl mx-auto">
               🗑️
             </div>
-            <h3 className="text-base font-bold text-gray-800">ยืนยันการลบรายการ?</h3>
-            <p className="text-xs text-gray-500">คุณต้องการลบรายการนี้ใช่หรือไม่ ข้อมูลจะไม่สามารถกู้คืนได้</p>
+            <h3 className="text-base font-bold text-gray-800">ยืนยันการลบเซ็ตแผนการเงินนี้?</h3>
+            <p className="text-xs text-gray-500">ข้อมูลการวางแผนในเซ็ตนี้จะถูกลบออกทั้งหมด</p>
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => setItemToDelete(null)}
@@ -678,7 +684,7 @@ function App() {
         </div>
       )}
 
-      {/* 🗺️ Modal หน้าวางแผนการเงิน (เงื่อนไขอัจฉริยะ: ถ้ายังไม่เคยกรอก จะขึ้นแบบอันที่ 2 โล่งๆ ทันที) */}
+      {/* 🗺️ Modal หน้าวางแผนการเงิน (ถ้ายังไม่เคยกรอก จะเป็นหน้าโล่งๆ ทันที และมีปุ่มลบเซ็ต) */}
       {activeModal === "budget_planner" && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
@@ -692,10 +698,10 @@ function App() {
 
             <div className="overflow-y-auto space-y-6 flex-1 pr-1">
               {budgetSets.length === 0 ? (
-                // ถ้ายังไม่เคยกรอกข้อมูลเลย ให้ขึ้นแบบที่ 2 (ฟอร์มโล่งๆ สร้างเซ็ตแรก) ทันที
+                // หน้าโล่งๆ กรณีไม่เคยกรอก
                 <div className="space-y-4 pt-1">
                   <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl text-xs text-emerald-800 font-medium">
-                    👋 ยินดีต้อนรับสู่ระบบวางแผนการเงิน! เริ่มต้นสร้างเซ็ตแรกของคุณด้านล่างนี้ได้เลย (เช่น งบ 700 บาท)
+                    👋 ยินดีต้อนรับสู่ระบบวางแผนการเงิน! เริ่มต้นสร้างเซ็ตแรกของคุณด้านล่างนี้ได้เลย
                   </div>
                   <form onSubmit={handleSaveNewBudgetSet} className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -759,40 +765,38 @@ function App() {
                   </form>
                 </div>
               ) : (
-                // ถ้ามีข้อมูลแล้ว จะขึ้นแบบที่ 1 (โชว์เซ็ตที่มี และมีฟอร์มสร้างเซ็ตเพิ่มด้านล่าง)
+                // กรณีมีข้อมูลแล้ว (พร้อมปุ่มลบเซ็ต)
                 <>
-                  {/* แถบเลือกเซ็ต */}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-700 block">🎮 เลือกเซ็ตแผนการเงินที่ใช้งานอยู่:</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold text-gray-700 block">🎮 เลือกเซ็ตแผนการเงินที่ใช้งานอยู่:</label>
+                      {activeBudgetSet && (
+                        <button
+                          onClick={() => setItemToDelete({ type: "budgetSet", id: activeBudgetSet.id })}
+                          className="text-xs text-rose-600 hover:text-rose-800 font-bold px-2 py-1 bg-rose-50 rounded-lg border border-rose-100"
+                        >
+                          🗑️ ลบเซ็ตนี้ทิ้ง
+                        </button>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {budgetSets.map((set) => (
-                        <div key={set.id} className="flex items-center">
-                          <button
-                            onClick={() => setActiveBudgetSetId(set.id)}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                              activeBudgetSetId === set.id
-                                ? "bg-[#1E1E1E] text-white shadow-md"
-                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            }`}
-                          >
-                            <span>🛡️ {set.name}</span>
-                            <span className="text-[10px] opacity-85">({formatMoney(set.totalBudget)} บ.)</span>
-                          </button>
-                          {budgetSets.length > 1 && (
-                            <button
-                              onClick={() => setItemToDelete({ type: "budgetSet", id: set.id })}
-                              className="text-gray-400 hover:text-rose-600 ml-1.5 text-xs"
-                              title="ลบเซ็ตนี้"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
+                        <button
+                          key={set.id}
+                          onClick={() => setActiveBudgetSetId(set.id)}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                            activeBudgetSetId === set.id
+                              ? "bg-[#1E1E1E] text-white shadow-md"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          <span>🛡️ {set.name}</span>
+                          <span className="text-[10px] opacity-85">({formatMoney(set.totalBudget)} บ.)</span>
+                        </button>
                       ))}
                     </div>
                   </div>
 
-                  {/* แสดงรายละเอียดเซ็ตที่เลือก */}
                   {activeBudgetSet && (
                     <div className="space-y-3">
                       <div className="flex justify-between items-center text-xs font-bold px-1">
