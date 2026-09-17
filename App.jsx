@@ -1,23 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  Wallet,
-  PlusCircle,
-  TrendingUp,
-  TrendingDown,
-  PieChart,
-  Calendar,
-  CreditCard,
-  Trash2,
-  Edit2,
-  Camera,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react";
+const { useState, useEffect, useRef } = React;
 
-// หมวดหมู่รายจ่าย
 const EXPENSE_CATEGORIES = [
   { key: "food", label: "อาหาร/เครื่องดื่ม", color: "#EF4444" },
   { key: "transport", label: "เดินทาง/น้ำมัน", color: "#F59E0B" },
@@ -28,7 +10,6 @@ const EXPENSE_CATEGORIES = [
   { key: "other_exp", label: "อื่นๆ", color: "#6B7280" },
 ];
 
-// หมวดหมู่รายรับ
 const INCOME_CATEGORIES = [
   { key: "salary", label: "เงินเดือน/ค่าจ้าง", color: "#10B981" },
   { key: "business", label: "ธุรกิจส่วนตัว/งานเสริม", color: "#059669" },
@@ -44,8 +25,6 @@ const ACCOUNTS = [
 ];
 
 const ACCOUNT_LABEL = Object.fromEntries(ACCOUNTS.map((a) => [a.key, a.label]));
-
-// URL สำหรับ Backend Server บน Render
 const API_BASE_URL = "https://budget-backend-o7fq.onrender.com";
 
 function categoryInfo(key) {
@@ -112,7 +91,7 @@ function resizeImage(file, maxDim = 1024) {
   });
 }
 
-export default function App() {
+function App() {
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem("bp_transactions");
     return saved ? JSON.parse(saved) : [];
@@ -236,8 +215,8 @@ export default function App() {
       <div className="max-w-4xl mx-auto space-y-6">
         <header className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-500 text-white rounded-xl">
-              <Wallet className="w-6 h-6" />
+            <div className="p-3 bg-emerald-500 text-white rounded-xl font-bold">
+              💰
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900">Budget Planner</h1>
@@ -254,9 +233,7 @@ export default function App() {
                 ฿{formatMoney(balance)}
               </h3>
             </div>
-            <div className="p-3 bg-slate-100 text-slate-600 rounded-xl">
-              <CreditCard className="w-5 h-5" />
-            </div>
+            <div className="p-3 bg-slate-100 text-slate-600 rounded-xl">💳</div>
           </div>
 
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
@@ -266,9 +243,7 @@ export default function App() {
                 +฿{formatMoney(totalIncome)}
               </h3>
             </div>
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-              <ArrowUpRight className="w-5 h-5" />
-            </div>
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">📈</div>
           </div>
 
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
@@ -278,9 +253,7 @@ export default function App() {
                 -฿{formatMoney(totalExpense)}
               </h3>
             </div>
-            <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
-              <ArrowDownRight className="w-5 h-5" />
-            </div>
+            <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">📉</div>
           </div>
         </div>
 
@@ -291,12 +264,7 @@ export default function App() {
             </h2>
             
             <label className="cursor-pointer flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium transition">
-              {scanning ? (
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-              ) : (
-                <Camera className="w-4 h-4 text-emerald-600" />
-              )}
-              <span>สแกนสลิปโอนเงิน</span>
+              <span>📷 {scanning ? "กำลังสแกน..." : "สแกนสลิปโอนเงิน"}</span>
               <input
                 type="file"
                 ref={fileInputRef}
@@ -310,8 +278,7 @@ export default function App() {
 
           {scanStatus && (
             <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-emerald-600" />
-              <span>{scanStatus}</span>
+              <span>ℹ️ {scanStatus}</span>
             </div>
           )}
 
@@ -488,15 +455,15 @@ export default function App() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleEdit(tx)}
-                          className="p-1.5 text-slate-400 hover:text-slate-600 transition"
+                          className="p-1.5 text-slate-400 hover:text-slate-600 transition text-xs"
                         >
-                          <Edit2 className="w-4 h-4" />
+                          ✏️
                         </button>
                         <button
-                          onClick={() => handleDelete(tx)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 transition"
+                          onClick={() => handleDelete(tx.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 transition text-xs"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          🗑️
                         </button>
                       </div>
                     </div>
@@ -510,3 +477,6 @@ export default function App() {
     </div>
   );
 }
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
