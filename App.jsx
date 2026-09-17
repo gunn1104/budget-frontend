@@ -2,7 +2,7 @@ const { useState, useEffect, useRef } = React;
 
 // 1. นำเข้า Firebase SDK ผ่าน CDN window
 const firebaseConfig = {
-  apiKey: "AIzaSyBo04M6atVIJe2wc7prBS6N6y...", // ใช้ Config เดิมของโปรเจกต์คุณ
+  apiKey: "AIzaSyBo04M6atVIJe2wc7prBS6N6y...", 
   authDomain: "budget-planner-app-b6620.firebaseapp.com",
   databaseURL: "https://budget-planner-app-b6620-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "budget-planner-app-b6620",
@@ -223,7 +223,7 @@ function App() {
   useEffect(() => localStorage.setItem("bp_debts", JSON.stringify(debts)), [debts]);
   useEffect(() => localStorage.setItem("bp_accountAdjustments", JSON.stringify(accountAdjustments)), [accountAdjustments]);
 
-  // Firebase Synchronization Effect (ซิงก์สถานะผู้ใช้และดึงรายงาน)
+  // Firebase User Sync
   useEffect(() => {
     const syncUserData = async () => {
       try {
@@ -247,20 +247,18 @@ function App() {
     if (userName) syncUserData();
   }, [userName, userAvatar, totalBalance, deviceId]);
 
-  // ดึงข้อมูล Real-time สำหรับ Admin Dashboard
+  // Admin Real-time Fetch
   useEffect(() => {
     if (!isAdminLoggedIn) return;
 
     const fetchAdminData = async () => {
       try {
-        // ดึงผู้ใช้งานทั้งหมด
         const userRes = await fetch(`${firebaseConfig.databaseURL}/users.json`);
         const userData = await userRes.json();
         if (userData) {
           setOnlineUsers(Object.values(userData));
         }
 
-        // ดึงรายการแจ้งปัญหาทั้งหมด
         const reportRes = await fetch(`${firebaseConfig.databaseURL}/reports.json`);
         const reportData = await reportRes.json();
         if (reportData) {
@@ -272,7 +270,7 @@ function App() {
     };
 
     fetchAdminData();
-    const interval = setInterval(fetchAdminData, 4000); // ดึงข้อมูลอัปเดตใหม่ทุก 4 วินาที
+    const interval = setInterval(fetchAdminData, 4000);
     return () => clearInterval(interval);
   }, [isAdminLoggedIn]);
 
@@ -597,7 +595,7 @@ function App() {
                 <label className="text-xs text-gray-500 block mb-1">ชื่อผู้ใช้ (Username)</label>
                 <input
                   type="text"
-                  placeholder="Admin"
+                  placeholder="กรอกชื่อผู้ใช้"
                   value={adminUsername}
                   onChange={(e) => setAdminUsername(e.target.value)}
                   className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-50"
@@ -608,7 +606,7 @@ function App() {
                 <label className="text-xs text-gray-500 block mb-1">รหัสผ่าน (Password)</label>
                 <input
                   type="password"
-                  placeholder="27112547"
+                  placeholder="กรอกรหัสผ่าน"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-50"
@@ -672,7 +670,7 @@ function App() {
           </button>
         </div>
 
-        {/* Admin Real-time Dashboard (แสดงผู้ใช้งานจริง & ยอดเงินสดๆ จาก Cloud) */}
+        {/* Admin Real-time Dashboard */}
         {isAdminLoggedIn && (
           <div className="bg-[#FFFDF6] border-2 border-[#EADBBD] rounded-3xl p-5 space-y-4 shadow-md">
             <div className="flex justify-between items-center border-b border-[#EADBBD] pb-2">
