@@ -119,7 +119,7 @@ function App() {
   const [goalToDeposit, setGoalToDeposit] = useState(null);
   const [depositAmount, setDepositAmount] = useState("");
 
-  // Budget Sets State (ตั้งค่าเริ่มต้นให้เป็นอาเรย์ว่างโล่งๆ ถ้าไม่มีข้อมูลเก่า)
+  // Budget Sets State
   const [budgetSets, setBudgetSets] = useState(() => {
     const saved = localStorage.getItem("bp_budgetSets");
     if (saved) {
@@ -128,7 +128,7 @@ function App() {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch (e) {}
     }
-    return []; // เริ่มต้นเป็นค่าว่างโล่งๆ
+    return [];
   });
   const [activeBudgetSetId, setActiveBudgetSetId] = useState(() => {
     return localStorage.getItem("bp_activeBudgetSetId") || "";
@@ -205,6 +205,18 @@ function App() {
   const [scanMessage, setScanMessage] = useState("");
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
+
+  // ล็อคไม่ให้หน้าจอหลักข้างหลังเลื่อนได้เวลาเปิด Modal ใดๆ
+  useEffect(() => {
+    if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || itemToDelete) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "auto";
+    }
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, [activeModal, isMenuOpen, showPrivacyNotice, showAdminLogin, showReportModal, goalToDeposit, itemToDelete]);
 
   const calcBankTotal =
     transactions.reduce(
@@ -684,26 +696,28 @@ function App() {
         </div>
       )}
 
-      {/* 🗺️ Modal หน้าวางแผนการเงิน (ถ้ายังไม่เคยกรอก จะเป็นหน้าโล่งๆ ทันที และมีปุ่มลบเซ็ต) */}
+      {/* 🗺️ Modal หน้าวางแผนการเงิน (แก้ปัญหา Scroll ทะลุและล็อคหน้าหลัง) */}
       {activeModal === "budget_planner" && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center border-b pb-3">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-hidden">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            
+            {/* Header (ตรึงติดด้านบน ไม่เลื่อนหนี) */}
+            <div className="p-5 border-b flex justify-between items-center bg-white shrink-0">
               <div>
-                <h3 className="text-lg font-extrabold text-gray-900">🗺️ ระบบวางแผนการเงิน (Budget Sets)</h3>
-                <p className="text-xs text-gray-500">เลือกหรือสร้างเซ็ตการใช้จ่ายล่วงหน้าตามสถานการณ์ (เช่น งบ 700 บาท)</p>
+                <h3 className="text-base sm:text-lg font-extrabold text-gray-900">🗺️ ระบบวางแผนการเงิน (Budget Sets)</h3>
+                <p className="text-xs text-gray-500">เลือกหรือสร้างเซ็ตการใช้จ่ายล่วงหน้าตามสถานการณ์</p>
               </div>
-              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold">✕</button>
+              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold p-2">✕</button>
             </div>
 
-            <div className="overflow-y-auto space-y-6 flex-1 pr-1">
+            {/* Content Body (ให้เลื่อนเฉพาะส่วนนี้เท่านั้น) */}
+            <div className="p-5 overflow-y-auto space-y-6 flex-1">
               {budgetSets.length === 0 ? (
-                // หน้าโล่งๆ กรณีไม่เคยกรอก
-                <div className="space-y-4 pt-1">
+                <div className="space-y-4">
                   <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl text-xs text-emerald-800 font-medium">
                     👋 ยินดีต้อนรับสู่ระบบวางแผนการเงิน! เริ่มต้นสร้างเซ็ตแรกของคุณด้านล่างนี้ได้เลย
                   </div>
-                  <form onSubmit={handleSaveNewBudgetSet} className="space-y-3">
+                  <form onSubmit={handleSaveNewBudgetSet} id="budget-form" className="space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <input
                         type="text"
@@ -758,14 +772,9 @@ function App() {
                         เหลือสำรอง: {formatMoney(newSetRemaining)} บ.
                       </span>
                     </div>
-
-                    <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold hover:bg-black transition shadow-sm">
-                      💾 บันทึกเซ็ตแผนการเงินนี้
-                    </button>
                   </form>
                 </div>
               ) : (
-                // กรณีมีข้อมูลแล้ว (พร้อมปุ่มลบเซ็ต)
                 <>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
@@ -773,7 +782,7 @@ function App() {
                       {activeBudgetSet && (
                         <button
                           onClick={() => setItemToDelete({ type: "budgetSet", id: activeBudgetSet.id })}
-                          className="text-xs text-rose-600 hover:text-rose-800 font-bold px-2 py-1 bg-rose-50 rounded-lg border border-rose-100"
+                          className="text-xs text-rose-600 hover:text-rose-800 font-bold px-2.5 py-1 bg-rose-50 rounded-lg border border-rose-100"
                         >
                           🗑️ ลบเซ็ตนี้ทิ้ง
                         </button>
@@ -832,10 +841,9 @@ function App() {
                     </div>
                   )}
 
-                  {/* ฟอร์มสร้างเซ็ตใหม่เพิ่มเติม */}
                   <div className="space-y-3 pt-4 border-t">
                     <h4 className="text-xs font-bold text-gray-800">➕ สร้างเซ็ตแผนการเงินเพิ่ม (เช่น Set 2, Set 3)</h4>
-                    <form onSubmit={handleSaveNewBudgetSet} className="space-y-3">
+                    <form onSubmit={handleSaveNewBudgetSet} id="budget-form" className="space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <input
                           type="text"
@@ -890,15 +898,36 @@ function App() {
                           เหลือสำรอง: {formatMoney(newSetRemaining)} บ.
                         </span>
                       </div>
-
-                      <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold hover:bg-black transition shadow-sm">
-                        💾 บันทึกเซ็ตแผนการเงินนี้
-                      </button>
                     </form>
                   </div>
                 </>
               )}
             </div>
+
+            {/* Footer Button (ตรึงติดด้านล่าง ไม่เลื่อนหลุด) */}
+            {budgetSets.length === 0 && (
+              <div className="p-4 border-t bg-white shrink-0">
+                <button
+                  type="submit"
+                  form="budget-form"
+                  className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold hover:bg-black transition shadow-sm"
+                >
+                  💾 บันทึกเซ็ตแผนการเงินนี้
+                </button>
+              </div>
+            )}
+            {budgetSets.length > 0 && (
+              <div className="p-4 border-t bg-white shrink-0">
+                <button
+                  type="submit"
+                  form="budget-form"
+                  className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold hover:bg-black transition shadow-sm"
+                >
+                  💾 บันทึกเซ็ตแผนการเงินนี้
+                </button>
+              </div>
+            )}
+
           </div>
         </div>
       )}
