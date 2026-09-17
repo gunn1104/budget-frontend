@@ -117,11 +117,16 @@ function App() {
   const [goalToDeposit, setGoalToDeposit] = useState(null);
   const [depositAmount, setDepositAmount] = useState("");
 
-  // State สำหรับแก้ไขเป้าหมายการออม
   const [goalToEdit, setGoalToEdit] = useState(null);
   const [editGoalName, setEditGoalName] = useState("");
   const [editGoalTarget, setEditGoalTarget] = useState("");
   const [editGoalCurrent, setEditGoalCurrent] = useState("");
+
+  // State สำหรับพักข้อมูลสลิปที่สแกนเสร็จ เพื่อรอให้ผู้ใช้เลือกหมวดหมู่ก่อนบันทึก
+  const [pendingSlip, setPendingSlip] = useState(null);
+  const [slipCategory, setSlipCategory] = useState("food");
+  const [slipCustomNote, setSlipCustomNote] = useState("");
+  const [slipTime, setSlipTime] = useState("");
 
   // Budget Sets State
   const [budgetSets, setBudgetSets] = useState(() => {
@@ -189,6 +194,8 @@ function App() {
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("food");
   const [date, setDate] = useState(todayStr());
+  const [time, setTime] = useState("");
+  const [customCategoryNote, setCustomCategoryNote] = useState("");
   const [note, setNote] = useState("");
 
   const [goalName, setGoalName] = useState("");
@@ -209,9 +216,9 @@ function App() {
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // ล็อคไม่ให้หน้าจอหลักข้างหลังเลื่อนเวลาเปิด Modal
+  // ล็อคไม่ให้หน้าจอหลักข้างหลังเลื่อนเวลาเปิด Modal หรือ Popup
   useEffect(() => {
-    if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || goalToEdit || itemToDelete) {
+    if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || goalToEdit || pendingSlip || itemToDelete) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "auto";
@@ -219,7 +226,7 @@ function App() {
     return () => {
       document.body.style.overflow = "auto";
     };
-  }, [activeModal, isMenuOpen, showPrivacyNotice, showAdminLogin, showReportModal, goalToDeposit, goalToEdit, itemToDelete]);
+  }, [activeModal, isMenuOpen, showPrivacyNotice, showAdminLogin, showReportModal, goalToDeposit, goalToEdit, pendingSlip, itemToDelete]);
 
   const calcBankTotal =
     transactions.reduce(
@@ -352,7 +359,6 @@ function App() {
     setDepositAmount("");
   };
 
-  // ฟังก์ชันบันทึกการแก้ไขเป้าหมายการออม
   const handleUpdateGoal = (e) => {
     e.preventDefault();
     if (!goalToEdit || !editGoalName || !editGoalTarget || Number(editGoalTarget) <= 0) return;
@@ -452,6 +458,7 @@ function App() {
     }
   };
 
+  // 🖼️ สแกนสลิปแล้วเก็บข้อมูลไว้ใน pendingSlip ให้ผู้ใช้เลือกหมวดหมู่ก่อนบันทึก
   const handleSingleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -470,17 +477,16 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         if (data.amount && Number(data.amount) > 0) {
-          const newTx = {
-            id: Date.now().toString(),
-            type: "expense",
-            account: "bank",
+          setPendingSlip({
             amount: Number(data.amount),
-            category: "food",
             date: data.date || todayStr(),
-            note: data.note || "นำเข้าจากสลิป",
-          };
-          setTransactions((prev) => [newTx, ...prev]);
-          setScanMessage(`สแกนสำเร็จ! บันทึกรายจ่าย ${formatMoney(data.amount)} บาท เรียบร้อยแล้ว`);
+            time: data.time || "",
+            note: data.note || "",
+          });
+          setSlipCategory("food");
+          setSlipCustomNote("");
+          setSlipTime(data.time || "");
+          setScanMessage("");
         } else {
           setScanMessage("อ่านสลิปสำเร็จ แต่ไม่พบยอดเงิน กรุณาตรวจสอบรูปภาพ");
         }
@@ -496,6 +502,28 @@ function App() {
     }
   };
 
+  // ยืนยันบันทึกสลิปหลังจากเลือกหมวดหมู่แล้ว
+  const handleConfirmSlip = (e) => {
+    e.preventDefault();
+    if (!pendingSlip) return;
+
+    const newTx = {
+      id: Date.now().toString(),
+      type: "expense",
+      account: "bank",
+      amount: pendingSlip.amount,
+      category: slipCategory,
+      customCategoryNote: slipCategory === "other_exp" ? slipCustomNote.trim() : "",
+      date: pendingSlip.date,
+      time: slipTime.trim(),
+      note: pendingSlip.note || "นำเข้าจากสลิป",
+    };
+
+    setTransactions((prev) => [newTx, ...prev]);
+    setPendingSlip(null);
+    setScanMessage(`บันทึกรายจ่าย ${formatMoney(pendingSlip.amount)} บาท เรียบร้อยแล้ว`);
+  };
+
   const handleAddTransaction = (e) => {
     e.preventDefault();
     if (!amount || Number(amount) <= 0) return;
@@ -505,12 +533,16 @@ function App() {
       account,
       amount: Number(amount),
       category,
+      customCategoryNote: category === "other_exp" ? customCategoryNote.trim() : "",
       date,
+      time: time.trim(),
       note,
     };
     setTransactions((prev) => [newTx, ...prev]);
     setAmount("");
     setNote("");
+    setCustomCategoryNote("");
+    setTime("");
     setActiveModal(null);
   };
 
@@ -678,6 +710,76 @@ function App() {
                 ยืนยันลบ
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🖼️ Popup ยืนยันหมวดหมู่และรายละเอียดหลังสแกนสลิป */}
+      {pendingSlip && (
+        <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">🧾 ยืนยันรายการจากสลิป</h3>
+                <p className="text-xs text-emerald-600 font-bold">ยอดเงิน: {formatMoney(pendingSlip.amount)} บาท</p>
+              </div>
+              <button onClick={() => setPendingSlip(null)} className="text-gray-400 text-lg font-bold">✕</button>
+            </div>
+
+            <form onSubmit={handleConfirmSlip} className="space-y-3 text-xs">
+              <div>
+                <label className="text-gray-500 block mb-1">เลือกหมวดหมู่จริง</label>
+                <select
+                  value={slipCategory}
+                  onChange={(e) => setSlipCategory(e.target.value)}
+                  className="w-full px-3 py-2.5 border rounded-xl bg-gray-50 font-bold"
+                >
+                  {EXPENSE_CATEGORIES.map((c) => (
+                    <option key={c.key} value={c.key}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {slipCategory === "other_exp" && (
+                <div>
+                  <label className="text-gray-500 block mb-1">ระบุรายละเอียด (ค่าอะไร?)</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น ค่าซ่อมรถ, ค่าอุปกรณ์"
+                    value={slipCustomNote}
+                    onChange={(e) => setSlipCustomNote(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium"
+                    required
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-gray-500 block mb-1">วันที่</label>
+                  <input
+                    type="date"
+                    value={pendingSlip.date}
+                    onChange={(e) => setPendingSlip({ ...pendingSlip, date: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-500 block mb-1">เวลา (ไม่บังคับ)</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น 14:30"
+                    value={slipTime}
+                    onChange={(e) => setSlipTime(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium"
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl font-bold">
+                ✓ บันทึกรายการนี้
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -1050,15 +1152,41 @@ function App() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[11px] text-gray-400 block mb-1">รายละเอียด (ไม่บังคับ)</label>
-                <input
-                  type="text"
-                  placeholder="เช่น ข้าวเที่ยง"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50"
-                />
+              {category === "other_exp" && (
+                <div>
+                  <label className="text-[11px] text-gray-400 block mb-1">ระบุรายละเอียด (ค่าอะไร?)</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น ค่าซ่อมรถ, ค่าอุปกรณ์"
+                    value={customCategoryNote}
+                    onChange={(e) => setCustomCategoryNote(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50 font-semibold"
+                    required
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] text-gray-400 block mb-1">เวลา (ไม่บังคับ)</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น 14:30"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-400 block mb-1">หมายเหตุเพิ่มเติม</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น ร้านโปรด"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl text-xs bg-gray-50"
+                  />
+                </div>
               </div>
 
               <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl font-bold text-xs">
@@ -1184,6 +1312,7 @@ function App() {
         </div>
       )}
 
+      {/* หน้าต่าง 3 ขีด แสดงประวัติทั้งหมด (พร้อมแสดงรายละเอียดหมวดอื่นๆ และเวลาแบบไม่บังคับ) */}
       {activeModal === "transactions" && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[80vh] flex flex-col">
@@ -1197,14 +1326,15 @@ function App() {
               ) : (
                 transactions.map((tx) => {
                   const info = categoryInfo(tx.category);
+                  const displayLabel = tx.category === "other_exp" && tx.customCategoryNote ? tx.customCategoryNote : info.label;
                   return (
                     <div key={tx.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl text-xs">
                       <div className="flex items-center gap-3">
                         <div className="w-2.5 h-8 rounded-full" style={{ backgroundColor: info.color }} />
                         <div>
-                          <p className="font-semibold text-gray-800">{info.label}</p>
+                          <p className="font-semibold text-gray-800">{displayLabel}</p>
                           <p className="text-[10px] text-gray-400">
-                            {formatDateThai(tx.date)} • {ACCOUNT_LABEL[tx.account]}
+                            {formatDateThai(tx.date)} {tx.time && `• ${tx.time}`} • {ACCOUNT_LABEL[tx.account]}
                             {tx.note && ` • ${tx.note}`}
                           </p>
                         </div>
@@ -1759,7 +1889,7 @@ function App() {
                             </button>
                             <button
                               onClick={() => setGoalToDeposit(g)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-xl text-[10px] font-bold shadow-sm transition"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-xl text-[11px] font-bold shadow-sm transition"
                             >
                               + เติมเงิน
                             </button>
@@ -1799,7 +1929,7 @@ function App() {
               >
                 <div className="text-2xl">🖼️</div>
                 <p className="text-xs font-bold text-gray-700">คลิกเพื่อเลือกรูปสลิป (ทีละ 1 รูป)</p>
-                <p className="text-[11px] text-gray-400">ระบบจะสแกนและบันทึกยอดเงินเข้าบัญชีทันที</p>
+                <p className="text-[11px] text-gray-400">ระบบจะสแกนและให้เลือกหมวดหมู่ก่อนบันทึก</p>
                 <input
                   type="file"
                   ref={fileInputRef}
