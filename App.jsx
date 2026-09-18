@@ -319,7 +319,6 @@ function App() {
         const userRes = await fetch(`${firebaseConfig.databaseURL}/users.json`);
         const userData = await userRes.json();
         if (userData) {
-          // แปลง Object เป็น Array และแนบ key (deviceId) ไว้ด้วยเพื่อให้ลบได้ง่าย
           const usersList = Object.entries(userData).map(([key, val]) => ({ id: key, ...val }));
           setOnlineUsers(usersList);
         } else {
@@ -351,6 +350,26 @@ function App() {
       console.error(err);
       alert("ไม่สามารถลบผู้ใช้งานได้ กรุณาลองใหม่อีกครั้ง");
     }
+  };
+
+  // ฟังก์ชันให้ผู้ใช้รีเซ็ตบัญชีและลบข้อมูลของตนเองเหมือนเพิ่งใช้งานครั้งแรก
+  const handleResetMyAccount = async () => {
+    if (!confirm("⚠️ คำเตือน: คุณต้องการลบข้อมูลทั้งหมดและเริ่มใช้งานใหม่ใช่หรือไม่? ข้อมูลประวัติ ยอดเงิน และโปรไฟล์ของคุณจะถูกลบทั้งหมด")) return;
+    
+    try {
+      // 1. ลบออกจาก Firebase Cloud ด้วย deviceId ของตัวเอง
+      await fetch(`${firebaseConfig.databaseURL}/users/${deviceId}.json`, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.error("Firebase Reset Error:", err);
+    }
+
+    // 2. เคลียร์ข้อมูลใน localStorage ทั้งหมด
+    localStorage.clear();
+
+    // 3. รีเฟรชหน้าจอหรือรีเซ็ต State เพื่อพาไปหน้า Welcome Onboarding 1
+    window.location.reload();
   };
 
   const confirmDelete = () => {
@@ -846,74 +865,87 @@ function App() {
       {/* ☰ Side Menu Drawer */}
       {isMenuOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex">
-          <div className="w-4/5 max-w-sm bg-white h-full p-6 space-y-4 shadow-2xl overflow-y-auto">
-            <div className="flex justify-between items-center border-b pb-4">
-              <h2 className="text-lg font-bold text-[#1E1E1E]">เมนูและเครื่องมือ</h2>
-              <button onClick={() => setIsMenuOpen(false)} className="text-gray-400 text-xl font-bold">
-                ✕
-              </button>
+          <div className="w-4/5 max-w-sm bg-white h-full p-6 space-y-4 shadow-2xl overflow-y-auto flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center border-b pb-4">
+                <h2 className="text-lg font-bold text-[#1E1E1E]">เมนูและเครื่องมือ</h2>
+                <button onClick={() => setIsMenuOpen(false)} className="text-gray-400 text-xl font-bold">
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <button
+                  onClick={() => { setActiveModal("transactions"); setIsMenuOpen(false); }}
+                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
+                >
+                  <span>📜 รายการประวัติทั้งหมด ({transactions.length})</span>
+                  <span>➔</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveModal("budget_planner"); setIsMenuOpen(false); }}
+                  className="w-full flex justify-between items-center p-3.5 bg-emerald-50 hover:bg-emerald-100 rounded-2xl text-xs font-bold text-emerald-800 border border-emerald-200"
+                >
+                  <span>🗺️ วางแผนการเงิน / จัดสรรงบ (เซ็ต Set 1, 2...)</span>
+                  <span>➔</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveModal("categories_detail"); setIsMenuOpen(false); }}
+                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
+                >
+                  <span>📊 สรุปใช้จ่ายตามหมวดหมู่ (ละเอียดยิบ)</span>
+                  <span>➔</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveModal("goals_detail"); setIsMenuOpen(false); }}
+                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
+                >
+                  <span>🎯 เป้าหมายการออม (รายละเอียดทั้งหมด)</span>
+                  <span>➔</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveModal("adjust"); setIsMenuOpen(false); }}
+                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
+                >
+                  <span>⚖️ ปรับยอดให้ตรงกับบัญชีจริง</span>
+                  <span>➔</span>
+                </button>
+              </div>
+
+              <div className="pt-4 border-t space-y-2">
+                <button
+                  onClick={() => { setTutorialStep(1); setIsMenuOpen(false); }}
+                  className="w-full text-left text-xs text-emerald-600 hover:text-emerald-800 py-2 font-semibold"
+                >
+                  💡 เปิดดูคู่มือแนะนำการใช้งาน (6 ขั้นตอน)
+                </button>
+                <button
+                  onClick={() => { setShowPrivacyNotice(true); setIsMenuOpen(false); }}
+                  className="w-full text-left text-xs text-gray-600 hover:text-black py-2"
+                >
+                  📜 นโยบายการเก็บข้อมูล
+                </button>
+                <button
+                  onClick={() => { setShowReportModal(true); setIsMenuOpen(false); }}
+                  className="w-full text-left text-xs text-rose-600 hover:text-rose-800 py-2 font-semibold"
+                >
+                  🚨 แจ้งปัญหาการใช้งาน
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-2 pt-2">
+            {/* 🗑️ ปุ่มลบข้อมูลและรีเซ็ตบัญชีของผู้ใช้ซ่อนไว้ด้านล่างเมนู 3 ขีด */}
+            <div className="pt-4 border-t shrink-0">
               <button
-                onClick={() => { setActiveModal("transactions"); setIsMenuOpen(false); }}
-                className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
+                onClick={handleResetMyAccount}
+                className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl text-xs font-bold border border-rose-200 transition flex items-center justify-center gap-2 shadow-sm"
               >
-                <span>📜 รายการประวัติทั้งหมด ({transactions.length})</span>
-                <span>➔</span>
-              </button>
-
-              <button
-                onClick={() => { setActiveModal("budget_planner"); setIsMenuOpen(false); }}
-                className="w-full flex justify-between items-center p-3.5 bg-emerald-50 hover:bg-emerald-100 rounded-2xl text-xs font-bold text-emerald-800 border border-emerald-200"
-              >
-                <span>🗺️ วางแผนการเงิน / จัดสรรงบ (เซ็ต Set 1, 2...)</span>
-                <span>➔</span>
-              </button>
-
-              <button
-                onClick={() => { setActiveModal("categories_detail"); setIsMenuOpen(false); }}
-                className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-              >
-                <span>📊 สรุปใช้จ่ายตามหมวดหมู่ (ละเอียดยิบ)</span>
-                <span>➔</span>
-              </button>
-
-              <button
-                onClick={() => { setActiveModal("goals_detail"); setIsMenuOpen(false); }}
-                className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-              >
-                <span>🎯 เป้าหมายการออม (รายละเอียดทั้งหมด)</span>
-                <span>➔</span>
-              </button>
-
-              <button
-                onClick={() => { setActiveModal("adjust"); setIsMenuOpen(false); }}
-                className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-              >
-                <span>⚖️ ปรับยอดให้ตรงกับบัญชีจริง</span>
-                <span>➔</span>
-              </button>
-            </div>
-
-            <div className="pt-6 border-t space-y-2">
-              <button
-                onClick={() => { setTutorialStep(1); setIsMenuOpen(false); }}
-                className="w-full text-left text-xs text-emerald-600 hover:text-emerald-800 py-2 font-semibold"
-              >
-                💡 เปิดดูคู่มือแนะนำการใช้งาน (6 ขั้นตอน)
-              </button>
-              <button
-                onClick={() => { setShowPrivacyNotice(true); setIsMenuOpen(false); }}
-                className="w-full text-left text-xs text-gray-600 hover:text-black py-2"
-              >
-                📜 นโยบายการเก็บข้อมูล
-              </button>
-              <button
-                onClick={() => { setShowReportModal(true); setIsMenuOpen(false); }}
-                className="w-full text-left text-xs text-rose-600 hover:text-rose-800 py-2 font-semibold"
-              >
-                🚨 แจ้งปัญหาการใช้งาน
+                <span>🗑️</span>
+                <span>รีเซ็ตบัญชีและลบข้อมูลทั้งหมด (เริ่มต้นใหม่)</span>
               </button>
             </div>
           </div>
@@ -2073,54 +2105,7 @@ function App() {
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-gray-400 text-center py-2">ไม่มีรายการค้างชำระ</p>
-              )}
-            </div>
-
-            {/* 2. 🎯 เป้าหมายการออมเงิน */}
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
-              <div className="flex justify-between items-center">
-                <h2 className="text-sm font-bold text-[#1E1E1E]">🎯 เป้าหมายการออมเงิน</h2>
-                {savingsGoals.length > 0 && (
-                  <button
-                    onClick={() => setActiveModal("goals_detail")}
-                    className="text-[11px] text-emerald-600 font-bold hover:underline"
-                  >
-                    ดูทั้งหมด ({savingsGoals.length})
-                  </button>
-                )}
-              </div>
-
-              {savingsGoals.length === 0 ? (
-                <p className="text-xs text-gray-400">ยังไม่มีเป้าหมายการออมเงิน</p>
-              ) : (
-                <div className="space-y-3">
-                  {savingsGoals.map((g) => {
-                    const progress = g.target > 0 ? Math.min(100, ((g.current || 0) / g.target) * 100).toFixed(0) : 0;
-                    return (
-                      <div key={g.id} className="p-3.5 bg-gray-50 rounded-2xl border text-xs space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-gray-900 text-sm">{g.name}</span>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => {
-                                setGoalToEdit(g);
-                                setEditGoalName(g.name);
-                                setEditGoalTarget(g.target);
-                                setEditGoalCurrent(g.current || 0);
-                              }}
-                              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1 rounded-xl text-[10px] font-bold"
-                            >
-                              ✏️ แก้ไข
-                            </button>
-                            <button
-                              onClick={() => setGoalToDeposit(g)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-xl text-[11px] font-bold shadow-sm transition"
-                            >
-                              + เติมเงิน
-                            </button>
-                            <button
-                              onClick={() => setItemToDelete({ type: "goal", id: g.id })}
+                <                              onClick={() => setItemToDelete({ type: "goal", id: g.id })}
                               className="text-gray-400 hover:text-rose-600 p-1"
                             >
                               🗑️
@@ -2145,7 +2130,7 @@ function App() {
 
             {/* นำเข้าสลิปทีละ 1 รูป */}
             <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน (เลือกทีละ 1 รูป)</h2>
+              <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน (เลือกทีละ 1 รูปไม่ใช่เลือกทีละหลายคน)</h2>
               
               <div
                 onClick={() => !scanning && fileInputRef.current?.click()}
@@ -2154,7 +2139,7 @@ function App() {
                 }`}
               >
                 <div className="text-2xl">🖼️</div>
-                <p className="text-xs font-bold text-gray-700">คลิกเพื่อเลือกรูปสลิป (ทีละ 1 รูป)</p>
+                <p className="text-xs font-bold text-gray-700">คลิกเพื่อเลือกรูปสลิป (ทีละ 1 รูปไม่ใช่เลือกทีหลายๆคน)</p>
                 <p className="text-[11px] text-gray-400">ระบบจะสแกนและให้เลือกหมวดหมู่ก่อนบันทึก</p>
                 <input
                   type="file"
@@ -2168,7 +2153,7 @@ function App() {
 
               {scanning && (
                 <div className="bg-[#FFFDF6] border border-[#EADBBD] p-3 rounded-2xl text-center">
-                  <p className="text-xs font-bold text-[#8C6D23] animate-pulse">⏳ กำลังสแกนสลิป กรุณารอสักครู่...</p>
+                  <p className="text-xs font-bold text-[#8C6D23] animate-pulse">⏳ กำลังสแกนสลิป กรุณารอสักครู่...คนเก่ายังรอได้เลย</p>
                 </div>
               )}
 
