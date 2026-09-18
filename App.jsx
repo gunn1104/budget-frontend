@@ -111,18 +111,13 @@ export default function App() {
     return id;
   });
 
-  // Profile State
   const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "");
   const [userAvatar, setUserAvatar] = useState(() => localStorage.getItem("bp_userAvatar") || "");
 
-  // Onboarding Wizard State
   const [onboardingStep, setOnboardingStep] = useState(() => {
     return !localStorage.getItem("bp_userName") ? 1 : null;
   });
   const [inputName, setInputName] = useState("");
-
-  // Tutorial Tour State
-  const [tutorialStep, setTutorialStep] = useState(0);
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null); 
@@ -135,20 +130,11 @@ export default function App() {
   const [editGoalTarget, setEditGoalTarget] = useState("");
   const [editGoalCurrent, setEditGoalCurrent] = useState("");
 
-  // Pending Slip State
   const [pendingSlip, setPendingSlip] = useState(null);
   const [slipCategory, setSlipCategory] = useState("food");
   const [slipCustomNote, setSlipCustomNote] = useState("");
   const [slipTime, setSlipTime] = useState("");
 
-  // Chat State
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState("");
-  const [adminSelectedUserChat, setAdminSelectedUserChat] = useState(null);
-  const [adminChatInput, setAdminChatInput] = useState("");
-  const chatScrollRef = useRef(null);
-
-  // Budget Sets State
   const [budgetSets, setBudgetSets] = useState(() => {
     const saved = localStorage.getItem("bp_budgetSets");
     if (saved) {
@@ -166,10 +152,7 @@ export default function App() {
   const [newSetName, setNewSetName] = useState("");
   const [newSetTotal, setNewSetTotal] = useState("");
   const [setAllocations, setSetAllocations] = useState({});
-  const [setCustomLabels, setSetCustomLabels] = useState({});
 
-  // Modals & Admin State
-  const [showPrivacyNotice, setShowPrivacyNotice] = useState(() => !localStorage.getItem("bp_privacyAccepted"));
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [adminUsername, setAdminUsername] = useState("");
@@ -181,13 +164,8 @@ export default function App() {
   const [reports, setReports] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
 
-  // Admin Broadcast Announcement State
-  const [announcementText, setAnnouncementText] = useState("");
-  const [activeAnnouncement, setActiveAnnouncement] = useState(null);
-
   const [itemToDelete, setItemToDelete] = useState(null);
 
-  // Core Data State
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem("bp_transactions");
     return saved ? JSON.parse(saved) : [];
@@ -235,22 +213,17 @@ export default function App() {
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // ควบคุมการเลื่อนหน้าจอเมื่อเปิด Modal
   useEffect(() => {
     const isAnyModalOpen =
       activeModal ||
       isMenuOpen ||
-      showPrivacyNotice ||
       showAdminLogin ||
       showReportModal ||
       goalToDeposit ||
       goalToEdit ||
       pendingSlip ||
       itemToDelete ||
-      onboardingStep ||
-      tutorialStep > 0 ||
-      activeAnnouncement ||
-      adminSelectedUserChat;
+      onboardingStep;
 
     if (isAnyModalOpen) {
       document.body.style.overflow = "hidden";
@@ -263,7 +236,6 @@ export default function App() {
   }, [
     activeModal,
     isMenuOpen,
-    showPrivacyNotice,
     showAdminLogin,
     showReportModal,
     goalToDeposit,
@@ -271,9 +243,6 @@ export default function App() {
     pendingSlip,
     itemToDelete,
     onboardingStep,
-    tutorialStep,
-    activeAnnouncement,
-    adminSelectedUserChat,
   ]);
 
   const calcBankTotal =
@@ -287,10 +256,6 @@ export default function App() {
       (acc, t) => (t.account === "cash" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
       0
     ) + accountAdjustments.cash;
-
-  const totalIncome = transactions
-    .filter((t) => t.type === "income")
-    .reduce((acc, t) => acc + t.amount, 0);
 
   const totalExpense = transactions
     .filter((t) => t.type === "expense")
@@ -330,7 +295,7 @@ export default function App() {
   useEffect(() => localStorage.setItem("bp_budgetSets", JSON.stringify(budgetSets)), [budgetSets]);
   useEffect(() => localStorage.setItem("bp_activeBudgetSetId", activeBudgetSetId), [activeBudgetSetId]);
 
-  // ส่ง Heartbeat สถานะออนไลน์ไปยัง Firebase
+  // ส่ง Heartbeat สถานะออนไลน์
   useEffect(() => {
     if (!userName) return;
     const sendHeartbeat = async () => {
@@ -357,7 +322,25 @@ export default function App() {
     return () => clearInterval(interval);
   }, [userName, userAvatar, totalBalance, deviceId]);
 
-  // ดึงข้อมูลคลาวด์และห้องแชท พร้อมระบบเช็คประกาศแบบเด้งครั้งเดียว
+  // ฟังก์ชันแปลงเวลาใช้งานล่าสุดให้แม่นยำ ไม่เป็น Invalid Date
+  const formatUserStatus = (lastActiveTimestamp) => {
+    if (!lastActiveTimestamp) return { text: "ออฟไลน์", isOnline: false };
+    const timeNum = Number(lastActiveTimestamp);
+    if (isNaN(timeNum)) return { text: "ออฟไลน์", isOnline: false };
+
+    const diffSec = Math.floor((Date.now() - timeNum) / 1000);
+    if (diffSec < 25) {
+      return { text: "🟢 กำลังใช้งานอยู่", isOnline: true };
+    } else {
+      const dateObj = new Date(timeNum);
+      if (isNaN(dateObj.getTime())) return { text: "ออฟไลน์", isOnline: false };
+      const timeStr = dateObj.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+      const dateStr = dateObj.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+      return { text: `⚪ ใช้งานล่าสุดเมื่อ ${dateStr} เวลา ${timeStr}`, isOnline: false };
+    }
+  };
+
+  // ดึงข้อมูลคลาวด์ (รายชื่อผู้ใช้ออนไลน์ และรายงานปัญหา)
   useEffect(() => {
     const fetchCloudData = async () => {
       try {
@@ -375,30 +358,6 @@ export default function App() {
           const reportData = await reportRes.json();
           if (reportData) setReports(Object.values(reportData).reverse());
         }
-
-        // เช็คประกาศสำคัญจากแอดมิน (แสดงเฉพาะคนที่ยังไม่เคยปิดประกาศนี้ และแสดงครั้งเดียว)
-        const annRes = await fetch(`${firebaseConfig.databaseURL}/announcement.json`);
-        const annData = await annRes.json();
-        if (annData && annData.text) {
-          const closedId = localStorage.getItem("bp_closedAnnouncementId");
-          if (closedId !== String(annData.id)) {
-            setActiveAnnouncement((prev) => (!prev || prev.id !== annData.id ? annData : prev));
-          } else {
-            setActiveAnnouncement(null);
-          }
-        } else {
-          setActiveAnnouncement(null);
-        }
-
-        if (deviceId) {
-          const chatRes = await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}.json`);
-          const chatData = await chatRes.json();
-          if (chatData) {
-            setChatMessages(Object.values(chatData));
-          } else {
-            setChatMessages([]);
-          }
-        }
       } catch (err) {
         console.error("Firebase Fetch Error:", err);
       }
@@ -407,96 +366,7 @@ export default function App() {
     fetchCloudData();
     const interval = setInterval(fetchCloudData, 3000);
     return () => clearInterval(interval);
-  }, [deviceId, isAdminLoggedIn]);
-
-  useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-    }
-  }, [chatMessages, activeModal]);
-
-  // 🤖 ระบบ AI บอทอัจฉริยะวิเคราะห์เจตนา + ถามย้ำ + ให้คำตอบ
-  const handleSendUserChat = async (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-    const userText = chatInput.trim();
-    const msgId = Date.now().toString();
-    const userMsg = {
-      id: msgId,
-      sender: "user",
-      senderName: userName || "ผู้ใช้",
-      text: userText,
-      time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}/${msgId}.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userMsg),
-      });
-      setChatMessages((prev) => [...prev, userMsg]);
-      setChatInput("");
-
-      const lower = userText.toLowerCase();
-      let botReplyText = "";
-
-      if (lower.includes("เลื่อน") || lower.includes("ขยับ") || lower.includes("พัง") || lower.includes("บั๊ก") || lower.includes(" error ") || lower.includes("ใช้ไม่ได้") || lower.includes("ค้าง")) {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\nคุณกำลังสอบถามเกี่ยวกับ **ปัญหาการใช้งาน / หน้าจอเลื่อนไม่ได้ใช่ไหมครับ?**\n\n💡 **วิธีแก้ไขเบื้องต้น:**\nอาการนี้เกิดจากหน้าต่างป๊อปอัปค้างการล็อกหน้าจอ แนะนำให้รีเฟรชหน้าเว็บ 1 ครั้ง ระบบจะกลับมาปกติครับ";
-      } else if (lower.includes("รูป") || lower.includes("สลิป") || lower.includes("ภาพ") || lower.includes("โปรไฟล์") || lower.includes("อัปโหลด")) {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\nคุณกำลังต้องการสอบถามเกี่ยวกับ **การใส่รูปภาพหรืออัปโหลดสลิปโอนเงินใช่ไหมครับ?**\n\n💡 **คำตอบ:** กดที่วงกลมรูปโปรไฟล์มุมซ้ายบนเพื่อเปลี่ยนรูป หรือใช้กล่องสแกนสลิปหน้าแรกเพื่อดึงยอดเงินอัตโนมัติครับ";
-      } else if (lower.includes("วิธี") || lower.includes("ยังไง") || lower.includes("ใช้") || lower.includes("เริ่มต้น") || lower.includes("คู่มือ")) {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\nคุณกำลังต้องการทราบ **วิธีการใช้งานแอปพลิเคชันใช่ไหมครับ?**\n\n💡 1. บันทึกรายรับ-รายจ่ายกดปุ่ม '+' หน้าแรก\n2. ตั้งเป้าหมายออมเงินได้ตลอดเวลา\n3. จัดสรรงบการเงินผ่านเมนู 3 ขีด ☰";
-      } else if (lower.includes("สวัสดี") || lower.includes("hi") || lower.includes("hello")) {
-        botReplyText = `🤖 AI วิเคราะห์คำถาม:\nสวัสดีครับคุณ ${userName || "ผู้ใช้"}! มีเรื่องไหนให้ AI ช่วยวิเคราะห์หรือสอบถามเพิ่มเติม พิมพ์บอกได้เลยครับ ยินดีให้บริการ!`;
-      } else {
-        botReplyText = `🤖 AI วิเคราะห์คำถาม:\nจากข้อความ "${userText}" AI ยังไม่แน่ใจว่าคุณหมายถึงเรื่องใด:\n1. วิธีใช้งานแอป\n2. วิธีสแกนสลิป\n3. ปัญหาหน้าจอ\n4. วางแผนการเงิน\n\nพิมพ์ระบุหัวข้อได้เลยครับ AI พร้อมตอบคำตอบให้ทันที!`;
-      }
-
-      setTimeout(async () => {
-        const botMsgId = (Date.now() + 1).toString();
-        const botMsg = {
-          id: botMsgId,
-          sender: "admin",
-          senderName: "AI บอทอัจฉริยะ 🤖",
-          text: botReplyText,
-          time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
-        };
-        await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}/${botMsgId}.json`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(botMsg),
-        });
-        setChatMessages((prev) => [...prev, botMsg]);
-      }, 1000);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleSendAdminChat = async (e) => {
-    e.preventDefault();
-    if (!adminChatInput.trim() || !adminSelectedUserChat) return;
-    const msgId = Date.now().toString();
-    const adminMsg = {
-      id: msgId,
-      sender: "admin",
-      senderName: "ผู้ดูแลระบบ (Admin)",
-      text: adminChatInput.trim(),
-      time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/chats/${adminSelectedUserChat.id}/${msgId}.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(adminMsg),
-      });
-      setAdminChatInput("");
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  }, [isAdminLoggedIn]);
 
   const handleAddTransaction = (e) => {
     e.preventDefault();
@@ -704,30 +574,6 @@ export default function App() {
     }
   };
 
-  const handleSendAnnouncement = async (e) => {
-    e.preventDefault();
-    if (!announcementText.trim()) return;
-
-    const annObj = {
-      id: Date.now(),
-      text: announcementText.trim(),
-      time: new Date().toLocaleString("th-TH"),
-    };
-
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/announcement.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(annObj),
-      });
-      alert("ประกาศข้อความไปยังผู้ใช้ทุกคนเรียบร้อยแล้ว!");
-      setAnnouncementText("");
-    } catch (err) {
-      console.error(err);
-      alert("ไม่สามารถส่งประกาศได้");
-    }
-  };
-
   const handleAdminLogin = (e) => {
     e.preventDefault();
     if (adminUsername === "admin" && adminPassword === "1234") {
@@ -778,7 +624,6 @@ export default function App() {
                 if (!inputName.trim()) return;
                 setUserName(inputName.trim());
                 setOnboardingStep(null);
-                setTutorialStep(1);
               }}
               className="space-y-4 text-left"
             >
@@ -801,74 +646,6 @@ export default function App() {
                 เริ่มใช้งานกันเลย 🚀
               </button>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* 📢 หน้าต่างประกาศสำคัญจากแอดมิน (เด้งครั้งเดียวสำหรับผู้ใช้งานใหม่/ตอนประกาศ) */}
-      {activeAnnouncement && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl border border-[#E4E1D6]">
-            <div className="text-3xl mb-2">📢</div>
-            <h3 className="text-lg font-bold mb-2 text-[#1B211E]">ประกาศสำคัญจากผู้ดูแลระบบ</h3>
-            <div className="bg-[#F3F2ED] p-3 rounded-xl text-sm text-[#333] mb-5 text-left whitespace-pre-wrap max-h-48 overflow-y-auto">
-              {activeAnnouncement.text}
-            </div>
-            <button
-              onClick={() => {
-                localStorage.setItem("bp_closedAnnouncementId", String(activeAnnouncement.id));
-                setActiveAnnouncement(null);
-              }}
-              className="w-full bg-[#1B211E] text-white py-3 rounded-xl font-bold text-sm hover:bg-black transition cursor-pointer"
-            >
-              ✕ ปิดประกาศนี้
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 🧭 Tutorial Tour แนะนำฟังก์ชัน */}
-      {tutorialStep > 0 && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl border border-[#E4E1D6]">
-            <div className="text-3xl mb-2">
-              {tutorialStep === 1 ? "📸" : tutorialStep === 2 ? "💰" : "🎯"}
-            </div>
-            <h3 className="text-lg font-bold mb-2">
-              {tutorialStep === 1 && "สแกนสลิปอัจฉริยะ"}
-              {tutorialStep === 2 && "กระเป๋าเงิน & ยอดคงเหลือ"}
-              {tutorialStep === 3 && "เป้าหมายการออมเงิน"}
-            </h3>
-            <p className="text-sm text-[#63695F] mb-6">
-              {tutorialStep === 1 && "อัปโหลดรูปสลิปโอนเงิน ระบบ AI จะทำการดึงยอดเงินและวันที่ให้อัตโนมัติทันที!"}
-              {tutorialStep === 2 && "แยกบัญชีธนาคารและเงินสดชัดเจน คำนวณยอดเงินรวมให้อัตโนมัติแบบเรียลไทม์"}
-              {tutorialStep === 3 && "สร้างเป้าหมายเก็บเงินในฝัน พร้อมฟังก์ชันฝากและถอนเงินสะสมได้ตลอดเวลา"}
-            </p>
-            <div className="flex gap-2">
-              {tutorialStep < 3 ? (
-                <>
-                  <button
-                    onClick={() => setTutorialStep(0)}
-                    className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-xl font-bold text-xs"
-                  >
-                    ข้ามคำแนะนำ
-                  </button>
-                  <button
-                    onClick={() => setTutorialStep(tutorialStep + 1)}
-                    className="flex-1 bg-[#2F6F5E] text-white py-2.5 rounded-xl font-bold text-xs"
-                  >
-                    ถัดไป →
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setTutorialStep(0)}
-                  className="w-full bg-[#2F6F5E] text-white py-3 rounded-xl font-bold text-sm shadow-md"
-                >
-                  พร้อมลุยเลย! 🎉
-                </button>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -1195,69 +972,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 💬 Modal แชทซัพพอร์ต & AI บอทอัจฉริยะ */}
-      {activeModal === "chatSupport" && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full h-[85vh] flex flex-col shadow-2xl border border-[#E4E1D6] overflow-hidden">
-            <div className="bg-[#1B211E] text-white p-4 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-sm">💬 แชทซัพพอร์ต & AI บอท</h3>
-                <p className="text-[10px] text-[#C7CBC2]">สอบถามปัญหา หรือคุยกับ AI ได้ตลอด 24 ชม.</p>
-              </div>
-              <button
-                onClick={() => setActiveModal(null)}
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#F3F2ED]">
-              {chatMessages.length === 0 ? (
-                <div className="text-center py-10 text-xs text-[#63695F]">
-                  ยังไม่มีข้อความสนทนา พิมพ์สอบถาม AI หรือปรึกษาปัญหาได้เลยครับ!
-                </div>
-              ) : (
-                chatMessages.map((m) => {
-                  const isUser = m.sender === "user";
-                  return (
-                    <div key={m.id} className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-                      <div className="text-[10px] text-[#63695F] mb-0.5 px-1">{m.senderName}</div>
-                      <div
-                        className={`max-w-[80%] p-3 rounded-2xl text-xs whitespace-pre-wrap ${
-                          isUser
-                            ? "bg-[#2F6F5E] text-white rounded-br-none"
-                            : "bg-white text-[#1B211E] border border-[#E4E1D6] rounded-bl-none shadow-sm"
-                        }`}
-                      >
-                        {m.text}
-                      </div>
-                      <div className="text-[9px] text-gray-400 mt-1 px-1">{m.time}</div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <form onSubmit={handleSendUserChat} className="p-3 bg-white border-t border-[#E4E1D6] flex gap-2">
-              <input
-                type="text"
-                placeholder="พิมพ์ข้อความสอบถาม AI..."
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                className="flex-1 p-3 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
-              />
-              <button
-                type="submit"
-                className="bg-[#2F6F5E] text-white px-5 rounded-xl text-xs font-bold shadow-md hover:bg-[#255749] transition"
-              >
-                ส่ง
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* 📊 Modal รายการประวัติทั้งหมด */}
       {activeModal === "historyList" && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -1340,7 +1054,6 @@ export default function App() {
             </div>
 
             <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-[#F3F2ED]">
-              {/* ฟอร์มสร้างเซ็ตใหม่ */}
               <div className="bg-white p-4 rounded-xl border border-[#E4E1D6] shadow-sm">
                 <h4 className="text-xs font-bold mb-3 text-[#1B211E]">➕ สร้างเซ็ตงบประมาณใหม่</h4>
                 <div className="space-y-3">
@@ -1387,7 +1100,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* รายการเซ็ตงบที่มี */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-[#1B211E]">📋 เซ็ตงบประมาณของคุณ</h4>
                 {budgetSets.length === 0 ? (
@@ -1565,15 +1277,6 @@ export default function App() {
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
-                  setActiveModal("chatSupport");
-                }}
-                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
-              >
-                <span>💬</span> แชทซัพพอร์ต (พร้อม AI บอทอัจฉริยะ)
-              </button>
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
                   setActiveModal("historyList");
                 }}
                 className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
@@ -1610,15 +1313,6 @@ export default function App() {
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
-                  setTutorialStep(1);
-                }}
-                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
-              >
-                <span>📖</span> คู่มือการใช้งานแอป
-              </button>
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
                   setShowAdminLogin(true);
                 }}
                 className="w-full p-3 rounded-xl bg-[#1B211E] text-white hover:bg-black transition flex items-center gap-3 text-xs font-bold text-left shadow-md mt-4"
@@ -1628,7 +1322,7 @@ export default function App() {
             </div>
 
             <div className="pt-4 border-t border-[#E4E1D6] text-center text-[10px] text-[#63695F]">
-              Budget Planner v2.5 · ปลอดภัยและใช้งานง่าย
+              Budget Planner v2.6 · ปลอดภัยและใช้งานง่าย
             </div>
           </div>
         </div>
@@ -1641,7 +1335,7 @@ export default function App() {
             <div className="bg-[#1B211E] text-white p-4 flex justify-between items-center">
               <div>
                 <h3 className="font-bold text-sm">🛡️ ระบบจัดการผู้ดูแลระบบ (Admin Control Panel)</h3>
-                <p className="text-[10px] text-[#C7CBC2]">ควบคุมระบบ ประกาศข้อความ และดูแลผู้ใช้งาน</p>
+                <p className="text-[10px] text-[#C7CBC2]">ตรวจสอบสถานะผู้ใช้งานและรายงานปัญหา</p>
               </div>
               <button
                 onClick={() => setIsAdminLoggedIn(false)}
@@ -1652,30 +1346,10 @@ export default function App() {
             </div>
 
             <div className="flex-1 p-5 overflow-y-auto space-y-6 bg-[#F3F2ED]">
-              {/* บรอดแคสต์ประกาศ */}
-              <div className="bg-white p-4 rounded-xl border border-[#E4E1D6] shadow-sm">
-                <h4 className="text-xs font-bold mb-2 text-[#1B211E]">📢 ส่งประกาศแจ้งเตือนถึงผู้ใช้ทุกคน</h4>
-                <form onSubmit={handleSendAnnouncement} className="space-y-3">
-                  <textarea
-                    placeholder="พิมพ์ข้อความประกาศสำคัญ..."
-                    value={announcementText}
-                    onChange={(e) => setAnnouncementText(e.target.value)}
-                    className="w-full p-3 rounded-xl border border-[#E4E1D6] text-xs h-24 focus:outline-none focus:border-[#2F6F5E]"
-                    required
-                  />
-                  <button
-                    type="submit"
-                    className="bg-[#2F6F5E] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md"
-                  >
-                    ส่งประกาศทันที
-                  </button>
-                </form>
-              </div>
-
-              {/* รายชื่อผู้ใช้ออนไลน์ */}
+              {/* รายชื่อผู้ใช้ออนไลน์ พร้อมสถานะล่าสุด (แก้ปัญหา Invalid Date แล้ว) */}
               <div className="bg-white p-4 rounded-xl border border-[#E4E1D6] shadow-sm">
                 <h4 className="text-xs font-bold mb-3 text-[#1B211E]">🟢 ผู้ใช้งานทั้งหมดในระบบ ({onlineUsers.length})</h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-60 overflow-y-auto">
                   {onlineUsers.map((u) => {
                     const status = formatUserStatus(u.lastActive);
                     return (
@@ -1688,22 +1362,16 @@ export default function App() {
                             {u.avatar ? (
                               <img src={u.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
                             ) : (
-                              u.userName.charAt(0).toUpperCase()
+                              (u.userName || "U").charAt(0).toUpperCase()
                             )}
                           </div>
                           <div>
-                            <div className="font-bold">{u.userName}</div>
+                            <div className="font-bold">{u.userName || "ผู้ใช้ทั่วไป"}</div>
                             <div className="text-[10px] text-[#63695F]">
-                              ยอดเงิน: {formatMoney(u.balance)} บาท · {status.text}
+                              ยอดเงิน: {formatMoney(u.balance)} บาท · <span className={status.isOnline ? "text-emerald-600 font-bold" : "text-gray-500"}>{status.text}</span>
                             </div>
                           </div>
                         </div>
-                        <button
-                          onClick={() => setAdminSelectedUserChat(u)}
-                          className="bg-[#1B211E] text-white px-3 py-1.5 rounded-lg text-[10px] font-bold"
-                        >
-                          แชทคุย
-                        </button>
                       </div>
                     );
                   })}
@@ -1730,67 +1398,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 💬 Admin Chat กับผู้ใช้รายบุคคล */}
-      {adminSelectedUserChat && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full h-[80vh] flex flex-col shadow-2xl border border-[#E4E1D6] overflow-hidden">
-            <div className="bg-[#1B211E] text-white p-4 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-sm">💬 แชทกับ: {adminSelectedUserChat.userName}</h3>
-                <p className="text-[10px] text-[#C7CBC2]">ID: {adminSelectedUserChat.id}</p>
-              </div>
-              <button
-                onClick={() => setAdminSelectedUserChat(null)}
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#F3F2ED]">
-              {chatMessages.length === 0 ? (
-                <div className="text-center py-10 text-xs text-[#63695F]">ยังไม่มีข้อความ</div>
-              ) : (
-                chatMessages.map((m) => {
-                  const isAdminMsg = m.sender === "admin";
-                  return (
-                    <div key={m.id} className={`flex flex-col ${isAdminMsg ? "items-end" : "items-start"}`}>
-                      <div className="text-[10px] text-[#63695F] mb-0.5 px-1">{m.senderName}</div>
-                      <div
-                        className={`max-w-[80%] p-3 rounded-2xl text-xs whitespace-pre-wrap ${
-                          isAdminMsg
-                            ? "bg-[#2F6F5E] text-white rounded-br-none"
-                            : "bg-white text-[#1B211E] border border-[#E4E1D6] rounded-bl-none shadow-sm"
-                        }`}
-                      >
-                        {m.text}
-                      </div>
-                      <div className="text-[9px] text-gray-400 mt-1 px-1">{m.time}</div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <form onSubmit={handleSendAdminChat} className="p-3 bg-white border-t border-[#E4E1D6] flex gap-2">
-              <input
-                type="text"
-                placeholder="พิมพ์ข้อความตอบกลับในฐานะ Admin..."
-                value={adminChatInput}
-                onChange={(e) => setAdminChatInput(e.target.value)}
-                className="flex-1 p-3 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
-              />
-              <button
-                type="submit"
-                className="bg-[#2F6F5E] text-white px-5 rounded-xl text-xs font-bold shadow-md"
-              >
-                ส่ง
-              </button>
-            </form>
           </div>
         </div>
       )}
@@ -1841,6 +1448,69 @@ export default function App() {
           </div>
         </div>
 
+        {/* 🎯 เป้าหมายการออม (นำกลับมาไว้หน้าหลักแบบขนาดย่อ) */}
+        <div className="bg-white rounded-3xl p-5 mb-6 border border-[#E4E1D6] shadow-sm">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <span>🎯</span> เป้าหมายการออมเงิน
+            </h3>
+            <button
+              onClick={() => setActiveModal("addGoal")}
+              className="bg-[#2F6F5E] text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm"
+            >
+              + เพิ่มเป้าหมาย
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {savingsGoals.length === 0 ? (
+              <div className="text-center py-4 text-xs text-[#63695F]">ยังไม่มีเป้าหมายการออม กดเพิ่มได้เลย!</div>
+            ) : (
+              savingsGoals.map((g) => {
+                const percent = Math.min(Math.round((g.current / g.target) * 100), 100);
+                return (
+                  <div key={g.id} className="p-3 rounded-2xl bg-[#F3F2ED] border border-[#E4E1D6] space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <div className="font-bold text-xs">{g.name}</div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setGoalToEdit(g)}
+                          className="text-[10px] font-bold text-gray-500 hover:text-black"
+                        >
+                          แก้ไข
+                        </button>
+                        <button
+                          onClick={() => setItemToDelete({ type: "goal", id: g.id })}
+                          className="text-gray-400 hover:text-red-600 text-xs font-bold"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                    <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                      <div
+                        className="bg-[#2F6F5E] h-full rounded-full transition-all duration-500"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-[#63695F]">
+                        สะสม <strong className="text-[#1B211E]">{formatMoney(g.current)}</strong> / {formatMoney(g.target)} ({percent}%)
+                      </span>
+                      <button
+                        onClick={() => setGoalToDeposit(g)}
+                        className="bg-[#2F6F5E] text-white px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-sm"
+                      >
+                        + เติมเงิน
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
         {/* 📷 กล่องสแกนสลิป AI อัตโนมัติ */}
         <div className="bg-white rounded-3xl p-5 mb-6 border border-[#E4E1D6] shadow-sm">
           <div className="flex items-center justify-between mb-3">
@@ -1870,7 +1540,6 @@ export default function App() {
             )}
           </div>
 
-          {/* พรีวิวข้อมูลสลิปที่ AI อ่านได้ */}
           {pendingSlip && (
             <div className="mt-4 p-4 rounded-2xl bg-[#F3F2ED] border border-[#E4E1D6] space-y-3">
               <div className="text-xs font-bold text-[#2F6F5E]">✨ ตรวจพบข้อมูลสลิปสำเร็จ! ตรวจสอบและกดยืนยัน:</div>
@@ -2056,69 +1725,6 @@ export default function App() {
               + บันทึกรายการ
             </button>
           </form>
-        </div>
-
-        {/* 🎯 เป้าหมายการออม */}
-        <div className="bg-white rounded-3xl p-5 mb-6 border border-[#E4E1D6] shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm font-bold flex items-center gap-2">
-              <span>🎯</span> เป้าหมายการออมเงิน
-            </h3>
-            <button
-              onClick={() => setActiveModal("addGoal")}
-              className="bg-[#2F6F5E] text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm"
-            >
-              + เพิ่มเป้าหมาย
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {savingsGoals.length === 0 ? (
-              <div className="text-center py-6 text-xs text-[#63695F]">ยังไม่มีเป้าหมายการออม กดเพิ่มได้เลย!</div>
-            ) : (
-              savingsGoals.map((g) => {
-                const percent = Math.min(Math.round((g.current / g.target) * 100), 100);
-                return (
-                  <div key={g.id} className="p-4 rounded-2xl bg-[#F3F2ED] border border-[#E4E1D6] space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="font-bold text-xs">{g.name}</div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setGoalToEdit(g)}
-                          className="text-[10px] font-bold text-gray-500 hover:text-black"
-                        >
-                          แก้ไข
-                        </button>
-                        <button
-                          onClick={() => setItemToDelete({ type: "goal", id: g.id })}
-                          className="text-gray-400 hover:text-red-600 text-xs font-bold"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                    <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
-                      <div
-                        className="bg-[#2F6F5E] h-full rounded-full transition-all duration-500"
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between items-center text-[11px]">
-                      <span className="text-[#63695F]">
-                        สะสมแล้ว <strong className="text-[#1B211E]">{formatMoney(g.current)}</strong> / {formatMoney(g.target)} ({percent}%)
-                      </span>
-                      <button
-                        onClick={() => setGoalToDeposit(g)}
-                        className="bg-[#2F6F5E] text-white px-3 py-1 rounded-lg text-[10px] font-bold shadow-sm"
-                      >
-                        + เติมเงิน
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
         </div>
 
         {/* 📌 หนี้สินและรายการเบิก */}
