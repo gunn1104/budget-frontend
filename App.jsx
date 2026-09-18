@@ -121,7 +121,7 @@ function App() {
   });
   const [inputName, setInputName] = useState("");
 
-  // Tutorial Spotlight State (0: ไม่เปิด, 1-3: ขั้นตอนแนะนำ)
+  // Tutorial Tour State (0: ไม่เปิด, 1-6: 6 ขั้นตอนการทัวร์)
   const [tutorialStep, setTutorialStep] = useState(0);
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -318,7 +318,13 @@ function App() {
       try {
         const userRes = await fetch(`${firebaseConfig.databaseURL}/users.json`);
         const userData = await userRes.json();
-        if (userData) setOnlineUsers(Object.values(userData));
+        if (userData) {
+          // แปลง Object เป็น Array และแนบ key (deviceId) ไว้ด้วยเพื่อให้ลบได้ง่าย
+          const usersList = Object.entries(userData).map(([key, val]) => ({ id: key, ...val }));
+          setOnlineUsers(usersList);
+        } else {
+          setOnlineUsers([]);
+        }
 
         const reportRes = await fetch(`${firebaseConfig.databaseURL}/reports.json`);
         const reportData = await reportRes.json();
@@ -331,6 +337,21 @@ function App() {
     const interval = setInterval(fetchAdminData, 4000);
     return () => clearInterval(interval);
   }, [isAdminLoggedIn]);
+
+  // ฟังก์ชันให้ Admin ลบผู้ใช้งานออกจาก Firebase
+  const handleDeleteUser = async (targetDeviceId) => {
+    if (!confirm("คุณต้องการลบข้อมูลผู้ใช้งานคนนี้ออกจากระบบหลังบ้านใช่หรือไม่?")) return;
+    try {
+      await fetch(`${firebaseConfig.databaseURL}/users/${targetDeviceId}.json`, {
+        method: "DELETE",
+      });
+      setOnlineUsers((prev) => prev.filter((u) => u.id !== targetDeviceId));
+      alert("ลบผู้ใช้งานเรียบร้อยแล้ว");
+    } catch (err) {
+      console.error(err);
+      alert("ไม่สามารถลบผู้ใช้งานได้ กรุณาลองใหม่อีกครั้ง");
+    }
+  };
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
@@ -698,7 +719,7 @@ function App() {
             </div>
             <h3 className="text-lg font-extrabold text-gray-900">ต้องการแนะนำวิธีใช้งานไหม?</h3>
             <p className="text-xs text-gray-500 leading-relaxed">
-              เรามีระบบแนะนำฟีเจอร์สำคัญ เช่น การสแกนสลิปอัจฉริยะและการจัดสรรงบ คุณต้องการให้แนะนำไหมครับ?
+              เรามีระบบทัวร์แนะนำ 6 ขั้นตอนครอบคลุมทุกฟังก์ชัน เพื่อให้คุณใช้งานได้คล่องทันที คุณต้องการรับชมไหมครับ?
             </p>
             <div className="space-y-2 pt-2">
               <button
@@ -708,7 +729,7 @@ function App() {
                 }}
                 className="w-full py-3 bg-[#1B5E20] text-white rounded-2xl text-xs font-bold shadow-md"
               >
-                ✨ เริ่มแนะนำการใช้งาน
+                ✨ เริ่มทัวร์แนะนำการใช้งาน (6 ขั้นตอน)
               </button>
               <button
                 onClick={() => setOnboardingStep(null)}
@@ -721,54 +742,102 @@ function App() {
         </div>
       )}
 
-      {/* 💡 TUTORIAL SPOTLIGHT OVERLAY (ระบบสอนใช้งานทีละปุ่มสไตล์เกม) */}
+      {/* 🗺️ ระบบสอนใช้งานแบบทัวร์ 6 ขั้นตอนครอบคลุมทุกระบบ */}
       {tutorialStep > 0 && (
         <div className="fixed inset-0 bg-black/80 z-[250] flex flex-col items-center justify-center p-6 text-center text-white">
-          <div className="max-w-xs space-y-4 bg-[#1E1E1E] p-6 rounded-3xl border border-gray-700 shadow-2xl">
+          <div className="max-w-sm w-full space-y-4 bg-[#1E1E1E] p-6 rounded-3xl border border-gray-700 shadow-2xl text-left">
+            <div className="flex justify-between items-center text-xs text-gray-400 font-bold border-b border-gray-800 pb-2">
+              <span>คู่มือการใช้งานระบบ</span>
+              <span className="text-emerald-400">ขั้นตอนที่ {tutorialStep} จาก 6</span>
+            </div>
+
             {tutorialStep === 1 && (
-              <>
-                <div className="text-3xl">📸</div>
-                <h4 className="text-base font-bold text-emerald-400">1. นำเข้าจากสลิปโอนเงิน</h4>
+              <div className="space-y-2">
+                <div className="text-2xl">👋</div>
+                <h4 className="text-sm font-bold text-emerald-400">1. ยินดีต้อนรับสู่แอปจัดการการเงิน</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">
-                  คลิกที่นี่เพื่อเลือกรูปสลิป ระบบจะอ่านยอดเงินและวันที่ให้ทันที พร้อมให้คุณเลือกหมวดหมู่และพิมพ์ระบุ "ค่าอะไร" ได้เอง!
+                  แอปนี้ออกแบบมาให้คุณจัดการเงิน เก็บออม และตรวจสอบสถานะทางการเงินได้อย่างรวดเร็วในหน้าจอเดียว!
                 </p>
-              </>
+              </div>
             )}
             {tutorialStep === 2 && (
-              <>
-                <div className="text-3xl">📊</div>
-                <h4 className="text-base font-bold text-emerald-400">2. กราฟวงกลมสรุปสัดส่วน</h4>
+              <div className="space-y-2">
+                <div className="text-2xl">📊</div>
+                <h4 className="text-sm font-bold text-emerald-400">2. ยอดเงินคงเหลือและกราฟวงกลม</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">
-                  แสดงสัดส่วนรายจ่ายคร่าวๆ ให้เห็นภาพรวมทันที และหากต้องการดูประละเอียดยิบพร้อมเวลา สามารถกดดูที่เมนู 3 ขีดได้เลย
+                  การ์ดสีดำด้านซ้ายจะสรุปยอดเงินทั้งหมดของคุณ และมีกราฟวงกลมแสดงสัดส่วนรายจ่ายให้เห็นชัดเจนว่าเงินเดือนนี้หมดไปกับค่าอะไรบ้าง
                 </p>
-              </>
+              </div>
             )}
             {tutorialStep === 3 && (
-              <>
-                <div className="text-3xl">🚀</div>
-                <h4 className="text-base font-bold text-emerald-400">3. พร้อมใช้งานแล้ว!</h4>
+              <div className="space-y-2">
+                <div className="text-2xl">📸</div>
+                <h4 className="text-sm font-bold text-emerald-400">3. สแกนสลิปอัจฉริยะ</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">
-                  คุณพร้อมจัดการการเงินของคุณแล้ว เริ่มบันทึกรายรับ-รายจ่ายหรือวางแผนการเงินกันเลย!
+                  ไม่ต้องพิมพ์เอง! แค่เลือกรูปสลิปโอนเงิน ระบบจะดึงยอดเงินและวันที่ให้อัตโนมัติ พร้อมให้คุณเลือกหมวดหมู่ หรือพิมพ์ระบุ <b>"ค่าอะไร"</b> ได้เอง
                 </p>
-              </>
+              </div>
+            )}
+            {tutorialStep === 4 && (
+              <div className="space-y-2">
+                <div className="text-2xl">➕</div>
+                <h4 className="text-sm font-bold text-emerald-400">4. บันทึกข้อมูล & เจ้าหนี้/ลูกหนี้</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  ใช้ปุ่มเพิ่มข้อมูลด้านล่างเพื่อจดรายรับ-รายจ่าย หรือบันทึกรายการเจ้าหนี้/ลูกหนี้/ยอดเบิกคืน เพื่อไม่ให้ลืมว่าใครติดเงินเราหรือเราติดใคร
+                </p>
+              </div>
+            )}
+            {tutorialStep === 5 && (
+              <div className="space-y-2">
+                <div className="text-2xl">🎯</div>
+                <h4 className="text-sm font-bold text-emerald-400">5. เป้าหมายการออม & วางแผนงบ</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  ตั้งเป้าหมายเก็บเงิน (เช่น ซื้อของ, เที่ยว) และจัดสรรงบเป็นเซ็ตล่วงหน้า (เช่น Set 1, Set 2) พร้อมกดแก้ไขหรือเติมเงินได้ตลอดเวลา
+                </p>
+              </div>
+            )}
+            {tutorialStep === 6 && (
+              <div className="space-y-2">
+                <div className="text-2xl">☰</div>
+                <h4 className="text-sm font-bold text-emerald-400">6. เมนูเพิ่มเติม (3 ขีดซ้ายบน)</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  กดปุ่ม 3 ขีดเพื่อเปิดดูประวัติย้อนหลังทั้งหมด, ดูสรุปหมวดหมู่ละเอียดยิบ (พร้อมเวลา), หรือปรับยอดเงินสด/ธนาคารให้ตรงกับความเป็นจริง พร้อมลุยแล้ว! 🎉
+                </p>
+              </div>
             )}
 
-            <div className="flex gap-2 pt-2">
-              {tutorialStep < 3 ? (
+            <div className="flex gap-2 pt-3">
+              {tutorialStep > 1 && (
+                <button
+                  onClick={() => setTutorialStep((prev) => prev - 1)}
+                  className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold"
+                >
+                  ← ย้อนกลับ
+                </button>
+              )}
+              {tutorialStep < 6 ? (
                 <button
                   onClick={() => setTutorialStep((prev) => prev + 1)}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
                 >
                   ถัดไป ➔
                 </button>
               ) : (
                 <button
                   onClick={() => setTutorialStep(0)}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
                 >
-                  🎉 เริ่มต้นใช้งานเลย
+                  🎉 จบการแนะนำ เริ่มใช้งานเลย
                 </button>
               )}
+            </div>
+            <div className="text-center pt-1">
+              <button
+                onClick={() => setTutorialStep(0)}
+                className="text-[11px] text-gray-400 hover:text-white underline"
+              >
+                ข้ามการแนะนำ
+              </button>
             </div>
           </div>
         </div>
@@ -832,7 +901,7 @@ function App() {
                 onClick={() => { setTutorialStep(1); setIsMenuOpen(false); }}
                 className="w-full text-left text-xs text-emerald-600 hover:text-emerald-800 py-2 font-semibold"
               >
-                💡 ดูคู่มือแนะนำการใช้งานอีกครั้ง
+                💡 เปิดดูคู่มือแนะนำการใช้งาน (6 ขั้นตอน)
               </button>
               <button
                 onClick={() => { setShowPrivacyNotice(true); setIsMenuOpen(false); }}
@@ -1779,7 +1848,7 @@ function App() {
           </button>
         </div>
 
-        {/* Admin Real-time Dashboard */}
+        {/* Admin Real-time Dashboard with Delete User feature */}
         {isAdminLoggedIn && (
           <div className="bg-[#FFFDF6] border-2 border-[#EADBBD] rounded-3xl p-5 space-y-4 shadow-md">
             <div className="flex justify-between items-center border-b border-[#EADBBD] pb-2">
@@ -1800,8 +1869,8 @@ function App() {
                 <p className="text-xs text-gray-400">ยังไม่มีข้อมูลผู้ใช้งานซิงก์เข้ามา</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                  {onlineUsers.map((u, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-2xl border border-gray-200 shadow-sm text-xs">
+                  {onlineUsers.map((u) => (
+                    <div key={u.id} className="flex items-center justify-between p-3 bg-white rounded-2xl border border-gray-200 shadow-sm text-xs">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-600 overflow-hidden border">
                           {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.userName.charAt(0)}
@@ -1811,9 +1880,18 @@ function App() {
                           <p className="text-[10px] text-gray-400">เข้าล่าสุด: {u.lastActive}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-gray-400">เงินคงเหลือ</p>
-                        <p className="font-extrabold text-emerald-600">{formatMoney(u.balance)} บ.</p>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-[10px] text-gray-400">เงินคงเหลือ</p>
+                          <p className="font-extrabold text-emerald-600">{formatMoney(u.balance)} บ.</p>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteUser(u.id)}
+                          className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-xl transition text-sm"
+                          title="ลบผู้ใช้นี้ออกจากระบบ"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </div>
                   ))}
