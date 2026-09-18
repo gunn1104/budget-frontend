@@ -1,7 +1,7 @@
 const { useState, useEffect, useRef } = React;
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, ACCOUNTS, formatMoney, todayStr, resizeImage } from './utils/constants.js';
-import AdminPanel, { AdminChatRoom } from './components/AdminPanel.jsx';
-import SidebarMenu from './components/SidebarMenu.jsx';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, ACCOUNTS, formatMoney, todayStr, resizeImage } from './constants.js';
+import AdminPanel, { AdminChatRoom } from './AdminPanel';
+import SidebarMenu from './SidebarMenu';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBo04M6atVIJe2wc7prBS6N6y...", 
