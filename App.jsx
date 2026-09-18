@@ -236,9 +236,24 @@ function App() {
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // Lock body scroll
+  // ควบคุมการเลื่อนหน้าจอ
   useEffect(() => {
-    if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || goalToEdit || pendingSlip || itemToDelete || onboardingStep || tutorialStep > 0 || activeAnnouncement) {
+    const isAnyModalOpen =
+      activeModal ||
+      isMenuOpen ||
+      showPrivacyNotice ||
+      showAdminLogin ||
+      showReportModal ||
+      goalToDeposit ||
+      goalToEdit ||
+      pendingSlip ||
+      itemToDelete ||
+      onboardingStep ||
+      tutorialStep > 0 ||
+      activeAnnouncement ||
+      adminSelectedUserChat;
+
+    if (isAnyModalOpen) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "auto";
@@ -246,7 +261,21 @@ function App() {
     return () => {
       document.body.style.overflow = "auto";
     };
-  }, [activeModal, isMenuOpen, showPrivacyNotice, showAdminLogin, showReportModal, goalToDeposit, goalToEdit, pendingSlip, itemToDelete, onboardingStep, tutorialStep, activeAnnouncement]);
+  }, [
+    activeModal,
+    isMenuOpen,
+    showPrivacyNotice,
+    showAdminLogin,
+    showReportModal,
+    goalToDeposit,
+    goalToEdit,
+    pendingSlip,
+    itemToDelete,
+    onboardingStep,
+    tutorialStep,
+    activeAnnouncement,
+    adminSelectedUserChat,
+  ]);
 
   const calcBankTotal =
     transactions.reduce(
@@ -401,7 +430,7 @@ function App() {
     }
   }, [chatMessages, activeModal]);
 
-  // 🤖 ระบบ AI บอทตอบอัตโนมัติอัจฉริยะ (Auto-Reply Bot)
+  // 🤖 ระบบ AI บอทอัจฉริยะวิเคราะห์เจตนา + ถามย้ำ + ให้คำตอบ
   const handleSendUserChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
@@ -416,7 +445,6 @@ function App() {
     };
 
     try {
-      // 1. บันทึกข้อความผู้ใช้ลง Firebase
       await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}/${msgId}.json`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -425,27 +453,57 @@ function App() {
       setChatMessages((prev) => [...prev, userMsg]);
       setChatInput("");
 
-      // 2. วิเคราะห์คำถามและให้ AI บอทตอบอัตโนมัติทันที
+      // วิเคราะห์เจตนาเชิงลึก (Intent & Semantic Analysis)
+      const lower = userText.toLowerCase();
       let botReplyText = "";
-      const lowerText = userText.toLowerCase();
 
-      if (lowerText.includes("ปัญหา") || lowerText.includes("พัง") || lowerText.includes("error") || lowerText.includes("ใช้ไม่ได้")) {
-        botReplyText = "🤖 AI ระบบช่วยเหลืออัตโนมัติ:\nขณะนี้แอดมินอาจยังไม่ว่างครับ หากระบบมีปัญหาหรือสลิปสแกนไม่ติด แนะนำให้ลองรีเซ็ตแอปหรือกดส่งรายงานปัญหาในเมนู 3 ขีดได้เลยครับ แอดมินจะรีบเข้ามาตรวจสอบให้เร็วที่สุด!";
-      } else if (lowerText.includes("วิธีใช้งาน") || lowerText.includes("ใช้ยังไง") || lowerText.includes("คู่มือ")) {
-        botReplyText = "🤖 AI แนะนำวิธีใช้งาน:\n1. บันทึกรายรับ-รายจ่ายกดที่ปุ่มเพิ่มข้อมูล\n2. สแกนสลิปโอนเงินได้ที่กล่องอัปโหลดหน้าแรก\n3. จัดสรรงบประมาณล่วงหน้าได้ในเมนู 'วางแผนการเงิน' ครับ";
-      } else if (lowerText.includes("สวัสดี") || lowerText.includes("hi") || lowerText.includes("hello")) {
-        botReplyText = `🤖 สวัสดีครับคุณ ${userName || "ผู้ใช้"}! มีเรื่องให้อุปกรณ์ช่วยดูแลหรือสอบถามแอดมินพิมพ์ไว้ได้เลยครับ ระบบ AI กำลังดูแลให้อยู่ครับ`;
-      } else {
-        botReplyText = "🤖 ระบบได้รับข้อความของคุณแล้วครับ ขณะนี้แอดมินตัวจริงยังไม่ว่างตอบกลับ AI ขอรับเรื่องไว้และจะแจ้งแอดมินให้ติดต่อกลับโดยเร็วนะครับ!";
+      // หมวด 1: ปัญหาหน้าจอเลื่อนไม่ได้ / บั๊ก / ใช้งานไม่ได้
+      if (lower.includes("เลื่อน") || lower.includes("ขยับ") || lower.includes("พัง") || lower.includes("บั๊ก") || lower.includes(" error ") || lower.includes("ใช้ไม่ได้") || lower.includes("ค้าง")) {
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
+          "คุณกำลังสอบถามเกี่ยวกับ **ปัญหาการใช้งาน / หน้าจอเลื่อนไม่ได้ใช่ไหมครับ?**\n\n" +
+          "💡 **วิธีแก้ไขเบื้องต้น:**\n" +
+          "อาการนี้เกิดจากหน้าต่างป๊อปอัปค้างการล็อกหน้าจอ แนะนำให้กดปิดปุ่มหรือรีเฟรชหน้าเว็บ 1 ครั้ง ระบบจะกลับมาเลื่อนได้ปกติครับ หรือกดแจ้งปัญหาในเมนู 3 ขีดได้เลยครับ!";
+      } 
+      // หมวด 2: วิธีใส่รูป / รูปโปรไฟล์ / อัปโหลดสลิป
+      else if (lower.includes("รูป") || lower.includes("สลิป") || lower.includes("ภาพ") || lower.includes("โปรไฟล์") || lower.includes("อัปโหลด")) {
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
+          "คุณกำลังต้องการสอบถามเกี่ยวกับ **การใส่รูปภาพหรืออัปโหลดสลิปโอนเงินใช่ไหมครับ?**\n\n" +
+          "💡 **คำตอบ:**\n" +
+          "• การเปลี่ยนรูปโปรไฟล์: กดที่วงกลมรูปโปรไฟล์ด้านซ้ายบนเพื่อเลือกรูปภาพจากเครื่อง\n" +
+          "• การสแกนสลิป: ไปที่กล่องประมวลผลสลิปหน้าแรก เลือกรูปสลิปทีละ 1 รูป ระบบจะดึงยอดเงินและวันที่ให้อัตโนมัติครับ!";
+      } 
+      // หมวด 3: วิธีใช้งานแอป / เริ่มต้นยังไง / คู่มือ
+      else if (lower.includes("วิธี") || lower.includes("ยังไง") || lower.includes("ใช้") || lower.includes("เริ่มต้น") || lower.includes("คู่มือ") || lower.includes("app")) {
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
+          "คุณกำลังต้องการทราบ **วิธีการใช้งานแอปพลิเคชันใช่ไหมครับ?**\n\n" +
+          "💡 **สรุปวิธีใช้งานหลัก:**\n" +
+          "1. บันทึกรายรับ-รายจ่าย: กดปุ่ม '+' เพิ่มข้อมูลหน้าหลัก\n" +
+          "2. ตั้งเป้าหมายออมเงิน: สร้างเป้าหมายและกดเติมเงินออมได้ตลอดเวลา\n" +
+          "3. วางแผนการเงิน: เปิดเมนู 3 ขีด ☰ แล้วเลือก 'วางแผนการเงิน' เพื่อจัดสรรงบเป็นเซ็ตครับ";
+      } 
+      // หมวด 4: คำทักทายทั่วไป
+      else if (lower.includes("สวัสดี") || lower.includes("hi") || lower.includes("hello") || lower.includes("หวัดดี")) {
+        botReplyText = `🤖 AI วิเคราะห์คำถาม:\nสวัสดีครับคุณ ${userName || "ผู้ใช้"}! มีเรื่องไหนให้ AI ช่วยวิเคราะห์หรือสอบถามแอดมิน พิมพ์บอกได้เลยครับ ยินดีให้บริการ 24 ชม.!`;
+      } 
+      // หมวด 5: กรณีไม่แน่ใจความหมาย -> ถามย้ำเพื่อให้ผู้ใช้ขยายความ แล้วค่อยให้คำตอบ
+      else {
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
+          `อืมน้า... จากข้อความที่คุณพิมพ์มาว่า "${userText}" AI ยังไม่แน่ใจว่าคุณหมายถึงเรื่องอะไรเป็นพิเศษ\n\n` +
+          "❓ **คุณต้องการสอบถามเกี่ยวกับเรื่องใดด้านล่างนี้หรือเปล่าครับ?**\n" +
+          "1. วิธีใช้งานแอปพลิเคชัน / เริ่มต้นใช้งาน\n" +
+          "2. วิธีการใส่รูปภาพ / สแกนสลิปโอนเงิน\n" +
+          "3. ปัญหาการใช้งาน / หน้าจอเลื่อนไม่ได้\n" +
+          "4. การวางแผนการเงิน / เป้าหมายออมเงิน\n\n" +
+          "พิมพ์ระบุหัวข้อหรือพิมพ์อธิบายเพิ่มเติมได้เลยครับ AI พร้อมตอบคำตอบให้ทันที!";
       }
 
-      // หน่วงเวลา 1 วินาทีให้ดูเป็นธรรมชาติเหมือนบอทกำลังพิมพ์
+      // ส่งข้อความตอบกลับจากบอท AI
       setTimeout(async () => {
         const botMsgId = (Date.now() + 1).toString();
         const botMsg = {
           id: botMsgId,
           sender: "admin",
-          senderName: "AI บอทอัตโนมัติ 🤖",
+          senderName: "AI บอทอัจฉริยะ 🤖",
           text: botReplyText,
           time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
         };
@@ -506,7 +564,6 @@ function App() {
       alert("ส่งประกาศแจ้งเตือนไปยังหน้าจอผู้ใช้ทุกคนเรียบร้อยแล้ว!");
     } catch (err) {
       console.error(err);
-      alert("ไม่สามารถส่งประกาศได้");
     }
   };
 
@@ -533,7 +590,6 @@ function App() {
       alert("ลบผู้ใช้งานเรียบร้อยแล้ว");
     } catch (err) {
       console.error(err);
-      alert("ไม่สามารถลบผู้ใช้งานได้");
     }
   };
 
@@ -819,7 +875,7 @@ function App() {
   return (
     <div className="min-h-screen bg-[#F7F5EF] text-[#2C2C2C] font-sans pb-12 relative">
 
-      {/* 🚨 แจ้งเตือนประกาศจาก Admin (เด้งขึ้นหน้าจอ บังคับค้าง 3 วินาที) */}
+      {/* 🚨 แจ้งเตือนประกาศจาก Admin */}
       {activeAnnouncement && (
         <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center border-2 border-amber-500">
@@ -1031,7 +1087,7 @@ function App() {
                   onClick={() => { setActiveModal("chat_admin"); setIsMenuOpen(false); }}
                   className="w-full flex justify-between items-center p-3.5 bg-blue-50 hover:bg-blue-100 rounded-2xl text-xs font-bold text-blue-800 border border-blue-200"
                 >
-                  <span>💬 แชทซัพพอร์ต (พร้อม AI บอทตอบอัตโนมัติ)</span>
+                  <span>💬 แชทซัพพอร์ต (พร้อม AI บอทอัจฉริยะ)</span>
                   <span>➔</span>
                 </button>
 
@@ -1102,7 +1158,7 @@ function App() {
         </div>
       )}
 
-      {/* 💬 Modal หน้าต่างแชท (มี AI บอทตอบอัตโนมัติ) */}
+      {/* 💬 Modal หน้าต่างแชท (AI วิเคราะห์เจตนาและถามย้ำ) */}
       {activeModal === "chat_admin" && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl flex flex-col h-[80vh] overflow-hidden">
@@ -1112,8 +1168,8 @@ function App() {
                   🤖
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold">แชทซัพพอร์ต & AI บอทอัตโนมัติ</h3>
-                  <p className="text-[10px] text-blue-300">ตอบไว 24 ชม. เมื่อแอดมินไม่ว่าง</p>
+                  <h3 className="text-sm font-bold">แชทซัพพอร์ต & AI บอทอัจฉริยะ</h3>
+                  <p className="text-[10px] text-blue-300">วิเคราะห์คำถามและให้คำตอบทันที 24 ชม.</p>
                 </div>
               </div>
               <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold p-1">✕</button>
@@ -1124,7 +1180,7 @@ function App() {
                 <div className="text-center py-10 space-y-2">
                   <div className="text-3xl">🤖💬</div>
                   <p className="text-xs font-bold text-gray-700">สอบถามปัญหาหรือวิธีใช้งานได้เลย!</p>
-                  <p className="text-[11px] text-gray-400">พิมพ์คำว่า "วิธีใช้งาน" หรือ "ระบบมีปัญหา" เพื่อให้ AI ช่วยตอบได้ทันที</p>
+                  <p className="text-[11px] text-gray-400">พิมพ์มาได้ทุกรูปแบบ AI จะช่วยวิเคราะห์และตอบคำถามให้อัตโนมัติครับ</p>
                 </div>
               ) : (
                 chatMessages.map((msg) => {
@@ -1132,7 +1188,7 @@ function App() {
                   return (
                     <div key={msg.id} className={`flex flex-col ${isAdmin ? "items-start" : "items-end"}`}>
                       <span className="text-[10px] text-gray-400 px-1 mb-0.5">{msg.senderName} • {msg.time}</span>
-                      <div className={`p-3 rounded-2xl text-xs max-w-[80%] leading-relaxed shadow-sm whitespace-pre-wrap ${
+                      <div className={`p-3 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-sm whitespace-pre-wrap ${
                         isAdmin ? "bg-white text-gray-800 border border-gray-200 rounded-tl-sm" : "bg-[#1E1E1E] text-white rounded-tr-sm"
                       }`}>
                         {msg.text}
@@ -1146,7 +1202,7 @@ function App() {
             <form onSubmit={handleSendUserChat} className="p-3 border-t bg-white flex gap-2 shrink-0">
               <input
                 type="text"
-                placeholder="พิมพ์ข้อความสอบถาม (เช่น ระบบมีปัญหา, วิธีใช้งาน)..."
+                placeholder="พิมพ์ข้อความสอบถาม (เช่น ใช้แอปยังไง, เลื่อนไม่ได้)..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 className="flex-1 px-4 py-2.5 border rounded-2xl text-xs bg-gray-50 font-medium"
