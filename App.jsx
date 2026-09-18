@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 const EXPENSE_CATEGORIES = [
   { key: "food", label: "อาหาร", color: "#A6303B" },
@@ -25,6 +25,15 @@ const ACCOUNTS = [
   { key: "cash", label: "เงินสด" },
 ];
 const ACCOUNT_LABEL = Object.fromEntries(ACCOUNTS.map((a) => [a.key, a.label]));
+
+const TUTORIAL_STEPS = [
+  { title: "ยินดีต้อนรับ", body: "แอปนี้ช่วยบันทึกรายรับ-รายจ่าย ตั้งเป้าหมายการออม ติดตามหนี้สิน และวางแผนงบประมาณล่วงหน้า" },
+  { title: "ยอดคงเหลือแบบสด", body: "การ์ดด้านบนสุดแสดงยอดคงเหลือรวม แยกเป็นยอดในธนาคารและเงินสด อัปเดตทันทีทุกครั้ง" },
+  { title: "เพิ่มรายการและนำเข้าจากสลิป", body: "กรอกรายรับ-รายจ่ายเอง หรืออัปโหลดรูปสลิปโอนเงินให้ AI อ่านยอดให้อัตโนมัติ" },
+  { title: "เป้าหมายการออมและงบประมาณ", body: "เพิ่มเป้าหมายการออม ฝาก/ถอน และตั้งเซ็ตงบประมาณรายเดือนเพื่อให้ระบบคำนวณงบต่อวัน" },
+  { title: "หนี้สินและการปรับยอด", body: "บันทึกเงินที่ติดหนี้ หรือใช้ปุ่มปรับยอดให้ตรงกับบัญชีจริงได้ทันที" },
+  { title: "โปรไฟล์และการใช้ร่วมกัน", body: "ตั้งชื่อและรูปโปรไฟล์ เลือกเปิดโหมดใช้ร่วมกันเพื่อแชร์ข้อมูลกันได้" },
+];
 
 const API_BASE_URL = "https://budget-backend-o7fq.onrender.com";
 const FIREBASE_DB_URL = "https://budget-planner-app-b6620-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -94,6 +103,8 @@ function budgetSetStats(s) {
 }
 
 const CONSENT_KEY = "budget-planner-consent-v1";
+const TUTORIAL_KEY = "budget-planner-tutorial-v1";
+const PROFILE_KEY = "budget-planner-profile-v1";
 const SCOPE_KEY = "budget-planner-scope-v2";
 const DATA_KEY_PRIVATE = "budget-planner-data-v4";
 const DATA_KEY_SHARED = "budget-planner-data-shared-v4";
@@ -103,6 +114,11 @@ export default function BudgetPlanner() {
 
   const [consentChecked, setConsentChecked] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
+  const [consentModalOpen, setConsentModalOpen] = useState(false);
+
+  const [tutorialSeen, setTutorialSeen] = useState(true);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
 
   const [profile, setProfile] = useState({ name: "", avatar: null });
   const profileFirstLoad = useRef(true);
@@ -209,6 +225,21 @@ export default function BudgetPlanner() {
       } catch (e) {}
       setConsentGiven(consent);
       setConsentChecked(true);
+
+      let seenTutorial = false;
+      try {
+        const t = await window.storage.get(TUTORIAL_KEY, false);
+        seenTutorial = !!(t && t.value === "true");
+      } catch (e) {}
+      setTutorialSeen(seenTutorial);
+
+      try {
+        const p = await window.storage.get(PROFILE_KEY, false);
+        if (p && p.value) {
+          const parsedP = JSON.parse(p.value);
+          setProfile({ name: parsedP.name || "", avatar: parsedP.avatar || null });
+        }
+      } catch (e) {}
 
       let scope = "private";
       try {
@@ -345,12 +376,45 @@ export default function BudgetPlanner() {
     } catch (err) {}
   };
 
+  useEffect(() => {
+    if (consentChecked && consentGiven && !tutorialSeen && !consentModalOpen) {
+      setTutorialOpen(true);
+    }
+  }, [consentChecked, consentGiven, tutorialSeen, consentModalOpen]);
+
   async function handleAcceptConsent() {
     setConsentGiven(true);
+    setConsentModalOpen(false);
     try {
       await window.storage.set(CONSENT_KEY, "true", false);
     } catch (e) {}
   }
+
+  async function markTutorialSeen() {
+    setTutorialSeen(true);
+    setTutorialOpen(false);
+    try {
+      await window.storage.set(TUTORIAL_KEY, "true", false);
+    } catch (e) {}
+  }
+
+  function openTutorial() {
+    setTutorialStep(0);
+    setTutorialOpen(true);
+  }
+
+  useEffect(() => {
+    if (!consentChecked) return;
+    if (profileFirstLoad.current) {
+      profileFirstLoad.current = false;
+      return;
+    }
+    (async () => {
+      try {
+        await window.storage.set(PROFILE_KEY, JSON.stringify(profile), false);
+      } catch (e) {}
+    })();
+  }, [profile, consentChecked]);
 
   async function handleAvatarChange(e) {
     const file = e.target.files && e.target.files[0];
@@ -808,7 +872,7 @@ export default function BudgetPlanner() {
         .bp-tx-amt.income { color: var(--income); }
         .bp-tx-amt.expense { color: var(--expense); }
         .bp-tx-actions { display: flex; gap: 2px; flex-shrink: 0; }
-        .bp-icon-btn { border: none; background: none; cursor: pointer; padding: 6px; border-radius: 7px; color: var(--ink-faint); display: flex; align-items: center; justify-content: center; }
+        .bp-icon-btn { border: none; background: none; cursor: pointer; padding: 6px; border-radius: 7px; color: var(--ink-faint); display: flex; align-items: center; justify-content: center; font-family: 'Noto Sans Thai', sans-serif; font-size: 13px; font-weight: 600; }
         .bp-icon-btn:hover { background: var(--bg); color: var(--ink); }
 
         .bp-edit-row { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 6px 0; }
@@ -840,7 +904,7 @@ export default function BudgetPlanner() {
         .bp-slip-confirm { flex: 1; border: none; background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 0; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
         .bp-slip-confirm:disabled { opacity: 0.35; cursor: not-allowed; }
         .bp-slip-discard { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--ink-soft); cursor: pointer; }
-        .bp-spin { animation: bp-spin 0.9s linear infinite; }
+        .bp-spin { animation: bp-spin 0.9s linear infinite; display: inline-block; }
         @keyframes bp-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
         .bp-modal-overlay { position: fixed; inset: 0; background: rgba(27,33,30,0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
@@ -849,6 +913,10 @@ export default function BudgetPlanner() {
         .bp-modal-body { font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin-bottom: 16px; }
         .bp-modal-body ul { padding-left: 18px; margin: 8px 0; }
         .bp-modal-body li { margin-bottom: 4px; }
+        .bp-tutorial-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 16px; }
+        .bp-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); transition: all 0.2s; }
+        .bp-dot.active { background: var(--ink); width: 16px; border-radius: 3px; }
+        .bp-tutorial-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
       `}</style>
 
       {activeAnnouncement && (
@@ -866,14 +934,49 @@ export default function BudgetPlanner() {
         </div>
       )}
 
-      {!consentGiven && consentChecked && (
+      {(!consentGiven || consentModalOpen) && consentChecked && (
         <div className="bp-modal-overlay">
           <div className="bp-modal-card">
             <h2 className="bp-modal-title">การเก็บข้อมูลของคุณ</h2>
             <div className="bp-modal-body">
-              <p>แอปนี้จะเก็บข้อมูลรายรับ-รายจ่าย เป้าหมาย และชื่อโปรไฟล์ของคุณ</p>
+              <p>แอปนี้จะเก็บข้อมูลต่อไปนี้ไว้ในระบบเก็บข้อมูลที่ผูกกับบัญชีของคุณ:</p>
+              <ul>
+                <li>รายรับ-รายจ่าย เป้าหมายการออม เซ็ตงบประมาณ และรายการหนี้สิน</li>
+                <li>ชื่อโปรไฟล์และรูปโปรไฟล์ที่คุณอัปโหลด</li>
+                <li>รูปสลิปโอนเงินที่คุณเลือกอัปโหลด</li>
+              </ul>
+              <p>ระบบนี้ไม่มีการเข้าสู่ระบบด้วยอีเมลจริงและไม่มีรหัสผ่าน ชื่อโปรไฟล์เป็นเพียงข้อความที่คุณพิมพ์เอง</p>
             </div>
-            <button className="bp-add-btn income" style={{ width: "100%" }} onClick={handleAcceptConsent}>ยอมรับและเข้าใช้งาน</button>
+            {!consentGiven ? (
+              <button className="bp-add-btn income" style={{ width: "100%" }} onClick={handleAcceptConsent}>ยอมรับและเข้าใช้งาน</button>
+            ) : (
+              <button className="bp-add-btn income" style={{ width: "100%" }} onClick={() => setConsentModalOpen(false)}>ปิด</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tutorialOpen && consentGiven && !consentModalOpen && (
+        <div className="bp-modal-overlay">
+          <div className="bp-modal-card">
+            <h2 className="bp-modal-title">{TUTORIAL_STEPS[tutorialStep].title}</h2>
+            <div className="bp-modal-body"><p>{TUTORIAL_STEPS[tutorialStep].body}</p></div>
+            <div className="bp-tutorial-dots">
+              {TUTORIAL_STEPS.map((_, i) => (<span key={i} className={`bp-dot ${i === tutorialStep ? "active" : ""}`} />))}
+            </div>
+            <div className="bp-tutorial-actions">
+              <button className="bp-policy-link" onClick={markTutorialSeen}>ข้าม</button>
+              <div style={{ display: "flex", gap: 8 }}>
+                {tutorialStep > 0 && (
+                  <button className="bp-icon-btn" style={{ border: "1px solid var(--line)", borderRadius: 9 }} onClick={() => setTutorialStep((s) => s - 1)}>ย้อนกลับ</button>
+                )}
+                {tutorialStep < TUTORIAL_STEPS.length - 1 ? (
+                  <button className="bp-add-btn income" onClick={() => setTutorialStep((s) => s + 1)} style={{ marginTop: 0 }}>ถัดไป</button>
+                ) : (
+                  <button className="bp-add-btn income" onClick={markTutorialSeen} style={{ marginTop: 0 }}>เริ่มใช้งาน</button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -882,12 +985,16 @@ export default function BudgetPlanner() {
         <h1 className="bp-title">งบประมาณของฉัน</h1>
         <div className="bp-header-btns">
           <button className={`bp-scope-btn ${showAdminView ? "shared" : ""}`} onClick={() => setShowAdminView((v) => !v)}>
-            ผู้ดูแลระบบ
+            🛡️ ผู้ดูแลระบบ
           </button>
           <button className={`bp-scope-btn ${dataScope === "shared" ? "shared" : ""}`} onClick={() => switchScope(dataScope === "shared" ? "private" : "shared")}>
-            {dataScope === "shared" ? "ใช้ร่วมกัน" : "ส่วนตัว"}
+            👥 {dataScope === "shared" ? "ใช้ร่วมกัน" : "ส่วนตัว"}
           </button>
         </div>
+      </div>
+      <div className="bp-link-row">
+        <button className="bp-policy-link" onClick={() => setConsentModalOpen(true)}>นโยบายข้อมูล</button>
+        <button className="bp-policy-link" onClick={openTutorial}>คู่มือการใช้งาน</button>
       </div>
       {dataScope === "shared" && (
         <p className="bp-scope-note" style={{ marginBottom: 14 }}>
@@ -897,7 +1004,7 @@ export default function BudgetPlanner() {
 
       {showAdminView && (
         <div className="bp-card bp-admin-card">
-          <div className="bp-card-head"><span className="bp-section-title">ระบบหลังบ้านผู้ดูแลระบบ (Firebase Cloud Dashboard)</span></div>
+          <div className="bp-card-head"><span className="bp-section-title">🛡️ ระบบหลังบ้านผู้ดูแลระบบ (Firebase Cloud Dashboard)</span></div>
           <p className="bp-admin-note">จัดการระบบ ประกาศแจ้งเตือน และดูรายชื่อผู้ใช้งานออนไลน์แบบ Real-time</p>
 
           <div style={{ background: "#fff", padding: 12, borderRadius: 12, marginBottom: 14, border: "1px solid var(--line)" }}>
@@ -934,6 +1041,7 @@ export default function BudgetPlanner() {
         <div className="bp-profile-row">
           <div className="bp-avatar-wrap" onClick={() => avatarInputRef.current && avatarInputRef.current.click()}>
             {profile.avatar ? (<img src={profile.avatar} className="bp-avatar-img" alt="รูปโปรไฟล์" />) : (<div className="bp-avatar-placeholder">{(profile.name || "?").slice(0, 1)}</div>)}
+            <span className="bp-avatar-edit-badge">✏️</span>
           </div>
           <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarChange} />
           <div style={{ flex: 1 }}>
@@ -957,7 +1065,7 @@ export default function BudgetPlanner() {
       </div>
 
       <div className="bp-card">
-        <div className="bp-card-head"><span className="bp-section-title">จัดสรรงบประมาณเป็นเซ็ต</span></div>
+        <div className="bp-card-head"><span className="bp-section-title">🐖 จัดสรรงบประมาณเป็นเซ็ต</span></div>
         {budgetSets.length === 0 && <p className="bp-empty">ยังไม่มีเซ็ตงบประมาณ เพิ่มเซ็ตแรกได้เลย</p>}
         {budgetSets.map((s) => {
           if (editingBudgetSetId === s.id) {
@@ -979,8 +1087,8 @@ export default function BudgetPlanner() {
               <div className="bp-goal-row">
                 <span className="bp-goal-name">{s.name}</span>
                 <div className="bp-goal-item-actions">
-                  <button className="bp-icon-btn" onClick={() => startEditBudgetSet(s)}>แก้ไข</button>
-                  <button className="bp-icon-btn" onClick={() => deleteBudgetSet(s.id)}>ลบ</button>
+                  <button className="bp-icon-btn" onClick={() => startEditBudgetSet(s)}>✏️</button>
+                  <button className="bp-icon-btn" onClick={() => deleteBudgetSet(s.id)}>🗑️</button>
                 </div>
               </div>
               <div className="bp-goal-track"><div className="bp-goal-fill" style={{ width: `${pct}%`, background: pct >= 100 ? "var(--expense)" : "var(--gold)" }} /></div>
@@ -1002,14 +1110,14 @@ export default function BudgetPlanner() {
             <div><label className="bp-field-label">ชื่อเซ็ตใหม่</label><input className="bp-input" value={budgetSetForm.name} onChange={(e) => setBudgetSetForm({ ...budgetSetForm, name: e.target.value })} placeholder="เช่น เซ็ตค่ากิน" /></div>
             <div><label className="bp-field-label">วงเงิน/เดือน (บาท)</label><input className="bp-input" type="number" value={budgetSetForm.monthlyAmount} onChange={(e) => setBudgetSetForm({ ...budgetSetForm, monthlyAmount: e.target.value })} /></div>
           </div>
-          <button className="bp-add-btn income" type="submit">เพิ่มเซ็ตงบประมาณ</button>
+          <button className="bp-add-btn income" type="submit">+ เพิ่มเซ็ตงบประมาณ</button>
         </form>
       </div>
 
       <div className="bp-grid">
         <div>
           <div className="bp-card">
-            <div className="bp-card-head"><span className="bp-section-title">เป้าหมายการออม</span></div>
+            <div className="bp-card-head"><span className="bp-section-title">🎯 เป้าหมายการออม</span></div>
             {goals.length === 0 && !addingGoal && <p className="bp-empty">ยังไม่มีเป้าหมาย</p>}
             {goals.map((g) =>
               editingGoalId === g.id ? (
@@ -1029,8 +1137,8 @@ export default function BudgetPlanner() {
                   <div className="bp-goal-row">
                     <span className="bp-goal-name">{g.name}</span>
                     <div className="bp-goal-item-actions">
-                      <button className="bp-icon-btn" onClick={() => startEditGoal(g)}>แก้ไข</button>
-                      <button className="bp-icon-btn" onClick={() => deleteGoal(g.id)}>ลบ</button>
+                      <button className="bp-icon-btn" onClick={() => startEditGoal(g)}>✏️</button>
+                      <button className="bp-icon-btn" onClick={() => deleteGoal(g.id)}>🗑️</button>
                     </div>
                   </div>
                   <div className="bp-goal-track"><div className="bp-goal-fill" style={{ width: `${g.target > 0 ? Math.min((g.saved / g.target) * 100, 100) : 0}%` }} /></div>
@@ -1041,6 +1149,13 @@ export default function BudgetPlanner() {
                     <input type="number" placeholder="จำนวนเงิน" value={contributionDrafts[g.id]?.amount || ""} onChange={(e) => setContributionDrafts((prev) => ({ ...prev, [g.id]: { ...(prev[g.id] || { type: "deposit" }), amount: e.target.value } }))} />
                     <button type="button" className="bp-contrib-add" onClick={() => addGoalContribution(g.id, contributionDrafts[g.id]?.amount, contributionDrafts[g.id]?.type || "deposit")}>เพิ่ม</button>
                   </div>
+                  {g.history && g.history.length > 0 && (
+                    <div className="bp-goal-history">
+                      {g.history.slice(0, 3).map((h) => (
+                        <span key={h.id} className={`bp-goal-hist-item ${h.type}`}>{h.type === "withdraw" ? "-" : "+"}{formatMoney(h.amount)} · {formatDateThai(h.date)}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             )}
@@ -1062,7 +1177,7 @@ export default function BudgetPlanner() {
           </div>
 
           <div className="bp-card">
-            <div className="bp-card-head"><span className="bp-section-title">ปรับยอดให้ตรงกับบัญชีจริง</span></div>
+            <div className="bp-card-head"><span className="bp-section-title">⚖️ ปรับยอดให้ตรงกับบัญชีจริง</span></div>
             {ACCOUNTS.map((a) => (
               <div className="bp-reconcile-row" key={a.key}>
                 <div className="bp-reconcile-label">{a.label}</div>
@@ -1078,7 +1193,7 @@ export default function BudgetPlanner() {
 
         <div>
           <div className="bp-card">
-            <p className="bp-section-title" style={{ marginBottom: 12 }}>นำเข้าจากสลิปโอนเงิน</p>
+            <p className="bp-section-title" style={{ marginBottom: 12 }}>📷 นำเข้าจากสลิปโอนเงิน</p>
             <input ref={slipInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { handleSlipFiles(e.target.files); e.target.value = ""; }} />
             <div className="bp-slip-drop" onClick={() => slipInputRef.current && slipInputRef.current.click()}>
               <span className="bp-slip-cta">เลือกรูปสลิป</span>
@@ -1093,7 +1208,7 @@ export default function BudgetPlanner() {
                       <img className="bp-slip-thumb" src={s.imageData} alt="สลิปโอนเงิน" />
                       <div className="bp-slip-body">
                         {s.status === "reading" ? (
-                          <div className="bp-slip-status">กำลังอ่านยอดเงินจากรูป...</div>
+                          <div className="bp-slip-status"><span className="bp-spin">⏳</span> กำลังอ่านยอดเงินจากรูป...</div>
                         ) : (
                           <>
                             {s.status === "manual" && <div className="bp-slip-status">อ่านยอดจากรูปไม่ได้ กรุณากรอกเอง</div>}
@@ -1128,7 +1243,7 @@ export default function BudgetPlanner() {
           </div>
 
           <div className="bp-card">
-            <p className="bp-section-title" style={{ marginBottom: 12 }}>เพิ่มรายการ</p>
+            <p className="bp-section-title" style={{ marginBottom: 12 }}>➕ เพิ่มรายการ</p>
             <div className="bp-type-toggle">
               <button className={`bp-type-btn expense ${formType === "expense" ? "active expense" : ""}`} onClick={() => handleTypeSwitch("expense")} type="button">รายจ่าย</button>
               <button className={`bp-type-btn income ${formType === "income" ? "active income" : ""}`} onClick={() => handleTypeSwitch("income")} type="button">รายรับ</button>
@@ -1157,7 +1272,7 @@ export default function BudgetPlanner() {
 
       <div className="bp-card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <p className="bp-section-title">แชทซัพพอร์ต & AI ผู้ช่วย</p>
+          <p className="bp-section-title">💬 แชทซัพพอร์ต & AI ผู้ช่วย</p>
           <button className="bp-scope-btn" onClick={() => setChatOpen(!chatOpen)}>{chatOpen ? "ซ่อนแชท" : "💬 เปิดแชท"}</button>
         </div>
         {chatOpen && (
@@ -1183,7 +1298,7 @@ export default function BudgetPlanner() {
       </div>
 
       <div className="bp-card">
-        <p className="bp-section-title" style={{ marginBottom: 12 }}>ใช้จ่ายตามหมวดหมู่</p>
+        <p className="bp-section-title" style={{ marginBottom: 12 }}>📊 ใช้จ่ายตามหมวดหมู่</p>
         {categoryBreakdown.length === 0 ? (
           <p className="bp-empty">ยังไม่มีรายจ่าย</p>
         ) : (
@@ -1199,7 +1314,7 @@ export default function BudgetPlanner() {
       </div>
 
       <div className="bp-card">
-        <p className="bp-section-title" style={{ marginBottom: 12 }}>หนี้สินและรายการเบิก</p>
+        <p className="bp-section-title" style={{ marginBottom: 12 }}>📌 หนี้สินและรายการเบิก</p>
         <div className="bp-debt-stats">
           <div className="bp-debt-stat expense"><span>ติดหนี้ค้างอยู่</span><b>{formatMoney(totalDebtUnpaid)} บาท</b></div>
           <div className="bp-debt-stat income"><span>รอเบิกคืน</span><b>{formatMoney(totalClaimUnpaid)} บาท</b></div>
@@ -1228,7 +1343,7 @@ export default function BudgetPlanner() {
                 <span className={`bp-tx-amt ${d.kind === "debt" ? "expense" : "income"}`}>{formatMoney(d.amount)}</span>
                 <div className="bp-tx-actions">
                   <button className="bp-icon-btn" onClick={() => toggleDebtStatus(d.id)}>✓</button>
-                  <button className="bp-icon-btn" onClick={() => deleteDebt(d.id)}>ลบ</button>
+                  <button className="bp-icon-btn" onClick={() => deleteDebt(d.id)}>🗑️</button>
                 </div>
               </div>
             ))}
@@ -1237,7 +1352,7 @@ export default function BudgetPlanner() {
       </div>
 
       <div className="bp-card">
-        <p className="bp-section-title" style={{ marginBottom: 12 }}>รายการทั้งหมด ({transactions.length})</p>
+        <p className="bp-section-title" style={{ marginBottom: 12 }}>📜 รายการทั้งหมด ({transactions.length})</p>
         {sortedTransactions.length === 0 ? (
           <p className="bp-empty">ยังไม่มีรายการ</p>
         ) : (
@@ -1274,8 +1389,8 @@ export default function BudgetPlanner() {
                   </div>
                   <span className={`bp-tx-amt ${t.type}`}>{t.type === "income" ? "+" : "−"}{formatMoney(t.amount)}</span>
                   <div className="bp-tx-actions">
-                    <button className="bp-icon-btn" onClick={() => startEdit(t)}>แก้ไข</button>
-                    <button className="bp-icon-btn" onClick={() => deleteTx(t.id)}>ลบ</button>
+                    <button className="bp-icon-btn" onClick={() => startEdit(t)}>✏️</button>
+                    <button className="bp-icon-btn" onClick={() => deleteTx(t.id)}>🗑️</button>
                   </div>
                 </div>
               );
