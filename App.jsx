@@ -357,7 +357,6 @@ function App() {
     if (!confirm("⚠️ คำเตือน: คุณต้องการลบข้อมูลทั้งหมดและเริ่มใช้งานใหม่ใช่หรือไม่? ข้อมูลประวัติ ยอดเงิน และโปรไฟล์ของคุณจะถูกลบทั้งหมด")) return;
     
     try {
-      // 1. ลบออกจาก Firebase Cloud ด้วย deviceId ของตัวเอง
       await fetch(`${firebaseConfig.databaseURL}/users/${deviceId}.json`, {
         method: "DELETE",
       });
@@ -365,10 +364,7 @@ function App() {
       console.error("Firebase Reset Error:", err);
     }
 
-    // 2. เคลียร์ข้อมูลใน localStorage ทั้งหมด
     localStorage.clear();
-
-    // 3. รีเฟรชหน้าจอหรือรีเซ็ต State เพื่อพาไปหน้า Welcome Onboarding 1
     window.location.reload();
   };
 
@@ -2105,7 +2101,54 @@ function App() {
                   ))}
                 </div>
               ) : (
-                <                              onClick={() => setItemToDelete({ type: "goal", id: g.id })}
+                <p className="text-xs text-gray-400 text-center py-2">ไม่มีรายการค้างชำระ</p>
+              )}
+            </div>
+
+            {/* 2. 🎯 เป้าหมายการออมเงิน */}
+            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
+              <div className="flex justify-between items-center">
+                <h2 className="text-sm font-bold text-[#1E1E1E]">🎯 เป้าหมายการออมเงิน</h2>
+                {savingsGoals.length > 0 && (
+                  <button
+                    onClick={() => setActiveModal("goals_detail")}
+                    className="text-[11px] text-emerald-600 font-bold hover:underline"
+                  >
+                    ดูทั้งหมด ({savingsGoals.length})
+                  </button>
+                )}
+              </div>
+
+              {savingsGoals.length === 0 ? (
+                <p className="text-xs text-gray-400">ยังไม่มีเป้าหมายการออมเงิน</p>
+              ) : (
+                <div className="space-y-3">
+                  {savingsGoals.map((g) => {
+                    const progress = g.target > 0 ? Math.min(100, ((g.current || 0) / g.target) * 100).toFixed(0) : 0;
+                    return (
+                      <div key={g.id} className="p-3.5 bg-gray-50 rounded-2xl border text-xs space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-gray-900 text-sm">{g.name}</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setGoalToEdit(g);
+                                setEditGoalName(g.name);
+                                setEditGoalTarget(g.target);
+                                setEditGoalCurrent(g.current || 0);
+                              }}
+                              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1 rounded-xl text-[10px] font-bold"
+                            >
+                              ✏️ แก้ไข
+                            </button>
+                            <button
+                              onClick={() => setGoalToDeposit(g)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-xl text-[11px] font-bold shadow-sm transition"
+                            >
+                              + เติมเงิน
+                            </button>
+                            <button
+                              onClick={() => setItemToDelete({ type: "goal", id: g.id })}
                               className="text-gray-400 hover:text-rose-600 p-1"
                             >
                               🗑️
@@ -2153,7 +2196,7 @@ function App() {
 
               {scanning && (
                 <div className="bg-[#FFFDF6] border border-[#EADBBD] p-3 rounded-2xl text-center">
-                  <p className="text-xs font-bold text-[#8C6D23] animate-pulse">⏳ กำลังสแกนสลิป กรุณารอสักครู่...คนเก่ายังรอได้เลย</p>
+                  <p className="text-xs font-bold text-[#8C6D23] animate-pulse">⏳ กำลังสแกนสลิป กรุณารอสักครู่...</p>
                 </div>
               )}
 
