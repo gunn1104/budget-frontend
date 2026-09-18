@@ -111,6 +111,19 @@ function App() {
     return id;
   });
 
+  // Profile State
+  const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "");
+  const [userAvatar, setUserAvatar] = useState(() => localStorage.getItem("bp_userAvatar") || "");
+
+  // Onboarding Wizard State (1: ใส่ชื่อ, 2: ใส่รูปโปรไฟล์, 3: ถามเรื่องสอนใช้งาน, null: จบกระบวนการ)
+  const [onboardingStep, setOnboardingStep] = useState(() => {
+    return !localStorage.getItem("bp_userName") ? 1 : null;
+  });
+  const [inputName, setInputName] = useState("");
+
+  // Tutorial Spotlight State (0: ไม่เปิด, 1-3: ขั้นตอนแนะนำ)
+  const [tutorialStep, setTutorialStep] = useState(0);
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null); 
   
@@ -122,7 +135,7 @@ function App() {
   const [editGoalTarget, setEditGoalTarget] = useState("");
   const [editGoalCurrent, setEditGoalCurrent] = useState("");
 
-  // State สำหรับพักข้อมูลสลิปที่สแกนเสร็จ เพื่อรอให้ผู้ใช้เลือกหมวดหมู่ก่อนบันทึก
+  // Pending Slip State
   const [pendingSlip, setPendingSlip] = useState(null);
   const [slipCategory, setSlipCategory] = useState("food");
   const [slipCustomNote, setSlipCustomNote] = useState("");
@@ -147,11 +160,6 @@ function App() {
   const [newSetTotal, setNewSetTotal] = useState("");
   const [setAllocations, setSetAllocations] = useState({});
   const [setCustomLabels, setSetCustomLabels] = useState({});
-
-  // Profile State
-  const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "");
-  const [userAvatar, setUserAvatar] = useState(() => localStorage.getItem("bp_userAvatar") || "");
-  const [tempUserName, setTempUserName] = useState("");
 
   // Modals & Admin State
   const [showPrivacyNotice, setShowPrivacyNotice] = useState(() => !localStorage.getItem("bp_privacyAccepted"));
@@ -216,9 +224,9 @@ function App() {
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // ล็อคไม่ให้หน้าจอหลักข้างหลังเลื่อนเวลาเปิด Modal หรือ Popup
+  // Lock body scroll
   useEffect(() => {
-    if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || goalToEdit || pendingSlip || itemToDelete) {
+    if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || goalToEdit || pendingSlip || itemToDelete || onboardingStep || tutorialStep > 0) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "auto";
@@ -226,7 +234,7 @@ function App() {
     return () => {
       document.body.style.overflow = "auto";
     };
-  }, [activeModal, isMenuOpen, showPrivacyNotice, showAdminLogin, showReportModal, goalToDeposit, goalToEdit, pendingSlip, itemToDelete]);
+  }, [activeModal, isMenuOpen, showPrivacyNotice, showAdminLogin, showReportModal, goalToDeposit, goalToEdit, pendingSlip, itemToDelete, onboardingStep, tutorialStep]);
 
   const calcBankTotal =
     transactions.reduce(
@@ -406,11 +414,6 @@ function App() {
     setShowPrivacyNotice(false);
   };
 
-  const handleSetProfileName = (e) => {
-    e.preventDefault();
-    if (tempUserName.trim()) setUserName(tempUserName.trim());
-  };
-
   const handleAvatarChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -458,7 +461,6 @@ function App() {
     }
   };
 
-  // 🖼️ สแกนสลิปแล้วเก็บข้อมูลไว้ใน pendingSlip ให้ผู้ใช้เลือกหมวดหมู่ก่อนบันทึก
   const handleSingleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -502,7 +504,6 @@ function App() {
     }
   };
 
-  // ยืนยันบันทึกสลิปหลังจากเลือกหมวดหมู่แล้ว
   const handleConfirmSlip = (e) => {
     e.preventDefault();
     if (!pendingSlip) return;
@@ -615,7 +616,164 @@ function App() {
   const newSetRemaining = (Number(newSetTotal) || 0) - newSetTotalAllocated;
 
   return (
-    <div className="min-h-screen bg-[#F7F5EF] text-[#2C2C2C] font-sans pb-12">
+    <div className="min-h-screen bg-[#F7F5EF] text-[#2C2C2C] font-sans pb-12 relative">
+
+      {/* 🚀 ONBOARDING WIZARD (สำหรับผู้ใช้ใหม่ครั้งแรก 3 หน้าต่าง) */}
+      {onboardingStep === 1 && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
+              👋
+            </div>
+            <h3 className="text-lg font-extrabold text-gray-900">ยินดีต้อนรับสู่แอปงบประมาณ!</h3>
+            <p className="text-xs text-gray-500">กรุณาใส่ชื่อของคุณเพื่อเริ่มต้นใช้งานระบบ</p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (inputName.trim()) {
+                  setUserName(inputName.trim());
+                  setOnboardingStep(2);
+                }
+              }}
+              className="space-y-3 pt-2"
+            >
+              <input
+                type="text"
+                placeholder="ชื่อของคุณ (เช่น Gun)"
+                value={inputName}
+                onChange={(e) => setInputName(e.target.value)}
+                className="w-full px-4 py-3 border rounded-2xl text-sm bg-gray-50 font-semibold text-center"
+                required
+              />
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold shadow-md">
+                ถัดไป ➔
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {onboardingStep === 2 && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
+              📷
+            </div>
+            <h3 className="text-lg font-extrabold text-gray-900">ตั้งค่ารูปโปรไฟล์</h3>
+            <p className="text-xs text-gray-500">คุณสามารถอัปโหลดรูปภาพโปรไฟล์ของคุณได้ (หรือจะข้ามไปก่อนก็ได้)</p>
+            
+            <div className="py-2 flex justify-center">
+              <div
+                onClick={() => avatarInputRef.current?.click()}
+                className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 cursor-pointer overflow-hidden border-2 border-dashed border-gray-300 mx-auto shadow-inner"
+              >
+                {userAvatar ? <img src={userAvatar} className="w-full h-full object-cover" /> : <span className="text-2xl">➕</span>}
+                <input type="file" ref={avatarInputRef} accept="image/*" className="hidden" onChange={handleAvatarChange} />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setOnboardingStep(3)}
+                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold"
+              >
+                ข้ามขั้นตอนนี้
+              </button>
+              <button
+                onClick={() => setOnboardingStep(3)}
+                className="flex-1 py-3 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold"
+              >
+                ถัดไป ➔
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {onboardingStep === 3 && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
+              💡
+            </div>
+            <h3 className="text-lg font-extrabold text-gray-900">ต้องการแนะนำวิธีใช้งานไหม?</h3>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              เรามีระบบแนะนำฟีเจอร์สำคัญ เช่น การสแกนสลิปอัจฉริยะและการจัดสรรงบ คุณต้องการให้แนะนำไหมครับ?
+            </p>
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => {
+                  setOnboardingStep(null);
+                  setTutorialStep(1);
+                }}
+                className="w-full py-3 bg-[#1B5E20] text-white rounded-2xl text-xs font-bold shadow-md"
+              >
+                ✨ เริ่มแนะนำการใช้งาน
+              </button>
+              <button
+                onClick={() => setOnboardingStep(null)}
+                className="w-full py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold"
+              >
+                ข้ามไปหน้าหลักเลย
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💡 TUTORIAL SPOTLIGHT OVERLAY (ระบบสอนใช้งานทีละปุ่มสไตล์เกม) */}
+      {tutorialStep > 0 && (
+        <div className="fixed inset-0 bg-black/80 z-[250] flex flex-col items-center justify-center p-6 text-center text-white">
+          <div className="max-w-xs space-y-4 bg-[#1E1E1E] p-6 rounded-3xl border border-gray-700 shadow-2xl">
+            {tutorialStep === 1 && (
+              <>
+                <div className="text-3xl">📸</div>
+                <h4 className="text-base font-bold text-emerald-400">1. นำเข้าจากสลิปโอนเงิน</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  คลิกที่นี่เพื่อเลือกรูปสลิป ระบบจะอ่านยอดเงินและวันที่ให้ทันที พร้อมให้คุณเลือกหมวดหมู่และพิมพ์ระบุ "ค่าอะไร" ได้เอง!
+                </p>
+              </>
+            )}
+            {tutorialStep === 2 && (
+              <>
+                <div className="text-3xl">📊</div>
+                <h4 className="text-base font-bold text-emerald-400">2. กราฟวงกลมสรุปสัดส่วน</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  แสดงสัดส่วนรายจ่ายคร่าวๆ ให้เห็นภาพรวมทันที และหากต้องการดูประละเอียดยิบพร้อมเวลา สามารถกดดูที่เมนู 3 ขีดได้เลย
+                </p>
+              </>
+            )}
+            {tutorialStep === 3 && (
+              <>
+                <div className="text-3xl">🚀</div>
+                <h4 className="text-base font-bold text-emerald-400">3. พร้อมใช้งานแล้ว!</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  คุณพร้อมจัดการการเงินของคุณแล้ว เริ่มบันทึกรายรับ-รายจ่ายหรือวางแผนการเงินกันเลย!
+                </p>
+              </>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              {tutorialStep < 3 ? (
+                <button
+                  onClick={() => setTutorialStep((prev) => prev + 1)}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
+                >
+                  ถัดไป ➔
+                </button>
+              ) : (
+                <button
+                  onClick={() => setTutorialStep(0)}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
+                >
+                  🎉 เริ่มต้นใช้งานเลย
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ☰ Side Menu Drawer */}
       {isMenuOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex">
@@ -670,6 +828,12 @@ function App() {
             </div>
 
             <div className="pt-6 border-t space-y-2">
+              <button
+                onClick={() => { setTutorialStep(1); setIsMenuOpen(false); }}
+                className="w-full text-left text-xs text-emerald-600 hover:text-emerald-800 py-2 font-semibold"
+              >
+                💡 ดูคู่มือแนะนำการใช้งานอีกครั้ง
+              </button>
               <button
                 onClick={() => { setShowPrivacyNotice(true); setIsMenuOpen(false); }}
                 className="w-full text-left text-xs text-gray-600 hover:text-black py-2"
@@ -1312,7 +1476,7 @@ function App() {
         </div>
       )}
 
-      {/* หน้าต่าง 3 ขีด แสดงประวัติทั้งหมด (พร้อมแสดงรายละเอียดหมวดอื่นๆ และเวลาแบบไม่บังคับ) */}
+      {/* หน้าต่าง 3 ขีด แสดงประวัติทั้งหมด */}
       {activeModal === "transactions" && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[80vh] flex flex-col">
@@ -1697,26 +1861,10 @@ function App() {
                 </div>
                 <div className="flex-1">
                   <label className="text-[11px] text-gray-400 block mb-1">ชื่อที่แสดง</label>
-                  {userName ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold">{userName}</span>
-                      <button onClick={() => setUserName("")} className="text-xs text-gray-400">✏️ แก้ไข</button>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleSetProfileName} className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="เช่น Gun"
-                        value={tempUserName}
-                        onChange={(e) => setTempUserName(e.target.value)}
-                        className="flex-1 px-3 py-1.5 border rounded-xl text-xs bg-gray-50"
-                        required
-                      />
-                      <button type="submit" className="px-3 py-1.5 bg-[#1E1E1E] text-white rounded-xl text-xs font-semibold">
-                        บันทึก
-                      </button>
-                    </form>
-                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold">{userName || "ผู้ใช้ทั่วไป"}</span>
+                    <button onClick={() => setUserName(prompt("เปลี่ยนชื่อผู้ใช้:", userName) || userName)} className="text-xs text-gray-400">✏️ แก้ไข</button>
+                  </div>
                 </div>
               </div>
             </div>
