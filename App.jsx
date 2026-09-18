@@ -155,10 +155,29 @@ function App() {
   const totalDebtor = debts.filter((d) => d.type === "debtor").reduce((acc, d) => acc + d.amount, 0);
   const totalReimburse = debts.filter((d) => d.type === "reimburse").reduce((acc, d) => acc + d.amount, 0);
 
+  const categoryExpenses = EXPENSE_CATEGORIES.map((cat) => {
+    const sum = transactions.filter((t) => t.type === "expense" && t.category === cat.key).reduce((acc, t) => acc + t.amount, 0);
+    return { ...cat, sum };
+  }).filter((c) => c.sum > 0);
+
+  const generatePieChartGradient = () => {
+    if (totalExpense === 0 || categoryExpenses.length === 0) return "#333 0deg 360deg";
+    let cumulativePercent = 0;
+    const gradients = categoryExpenses.map((cat) => {
+      const percent = (cat.sum / totalExpense) * 100;
+      const start = cumulativePercent;
+      cumulativePercent += percent;
+      return `${cat.color} ${start * 3.6}deg ${cumulativePercent * 3.6}deg`;
+    });
+    return gradients.join(", ");
+  };
+
   useEffect(() => { localStorage.setItem("bp_transactions", JSON.stringify(transactions)); }, [transactions]);
   useEffect(() => { localStorage.setItem("bp_savingsGoals", JSON.stringify(savingsGoals)); }, [savingsGoals]);
   useEffect(() => { localStorage.setItem("bp_debts", JSON.stringify(debts)); }, [debts]);
   useEffect(() => { localStorage.setItem("bp_userName", userName); }, [userName]);
+  useEffect(() => { localStorage.setItem("bp_userAvatar", userAvatar); }, [userAvatar]);
+  useEffect(() => { localStorage.setItem("bp_accountAdjustments", JSON.stringify(accountAdjustments)); }, [accountAdjustments]);
 
   useEffect(() => {
     if (!userName) return;
@@ -212,17 +231,82 @@ function App() {
     return () => clearInterval(interval);
   }, [deviceId, sessionStartTime]);
 
+  const handleAddTransaction = (e) => {
+    e.preventDefault();
+    if (!amount || Number(amount) <= 0) return;
+    const newTx = {
+      id: Date.now().toString(),
+      type,
+      account,
+      amount: Number(amount),
+      category: type === "expense" ? category : "salary",
+      customCategoryNote: category === "other_exp" ? customCategoryNote.trim() : "",
+      date: date || todayStr(),
+      time: time.trim(),
+      note: note.trim(),
+    };
+    setTransactions([newTx, ...transactions]);
+    setAmount(""); setNote(""); setCustomCategoryNote("");
+    setActiveModal(null);
+  };
+
+  const handleDeleteTransaction = (id) => {
+    if (!confirm("ต้องการลบรายการนี้ใช่หรือไม่?")) return;
+    setTransactions(transactions.filter((t) => t.id !== id));
+  };
+
+  const handleAddGoal = (e) => {
+    e.preventDefault();
+    if (!goalName.trim() || !goalTarget) return;
+    const newGoal = {
+      id: Date.now().toString(),
+      name: goalName.trim(),
+      target: Number(goalTarget),
+      current: Number(goalCurrent) || 0,
+    };
+    setSavingsGoals([...savingsGoals, newGoal]);
+    setGoalName(""); setGoalTarget(""); setGoalCurrent("");
+    setActiveModal(null);
+  };
+
+  const handleAddDebt = (e) => {
+    e.preventDefault();
+    if (!debtPerson.trim() || !debtAmount) return;
+    const newDebt = {
+      id: Date.now().toString(),
+      type: debtType,
+      person: debtPerson.trim(),
+      amount: Number(debtAmount),
+      dueDate: debtDueDate,
+      note: debtNote.trim(),
+      isPaid: false,
+    };
+    setDebts([...debts, newDebt]);
+    setDebtPerson(""); setDebtAmount(""); setDebtNote(""); setDebtDueDate("");
+    setActiveModal(null);
+  };
+
   const handleSendUserChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
     const userText = chatInput.trim();
     const msgId = Date.now().toString();
     const userMsg = { id: msgId, sender: "user", senderName: userName || "ผู้ใช้", text: userText, time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) };
+    
     await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}/${msgId}.json`, {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(userMsg),
     });
     setChatMessages((prev) => [...prev, userMsg]);
     setChatInput("");
+
+    setTimeout(async () => {
+      const botMsgId = (Date.now() + 1).toString();
+      const botMsg = { id: botMsgId, sender: "admin", senderName: "AI บอทอัจฉริยะ 🤖", text: "🤖 AI บอทรับทราบคำถามของคุณแล้วครับ มีส่วนไหนให้ช่วยเหลือเพิ่มเติมพิมพ์มาได้เลย!", time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) };
+      await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}/${botMsgId}.json`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(botMsg),
+      });
+      setChatMessages((prev) => [...prev, botMsg]);
+    }, 1000);
   };
 
   const handleSingleFileUpload = async (e) => {
@@ -239,10 +323,29 @@ function App() {
         const data = await res.json();
         if (data.amount && Number(data.amount) > 0) {
           setPendingSlip({ amount: Number(data.amount), date: data.date || todayStr(), time: data.time || "", note: data.note || "" });
-          setScanMessage("");
+          setSlipCategory("food"); setScanMessage("");
         } else { setScanMessage("อ่านสลิปสำเร็จ แต่ไม่พบยอดเงิน"); }
       } else { setScanMessage("ไม่สามารถประมวลผลสลิปนี้ได้"); }
-    } catch (err) { setScanMessage("เกิดข้อผิดพลาดในการเชื่อมต่อ"); } finally { setScanning(false); }
+    } catch (err) { setScanMessage("เกิดข้อผิดพลาดในการเชื่อมต่อ"); } finally { setScanning(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
+  };
+
+  const handleConfirmSlip = (e) => {
+    e.preventDefault();
+    if (!pendingSlip) return;
+    const newTx = {
+      id: Date.now().toString(),
+      type: "expense",
+      account: "bank",
+      amount: pendingSlip.amount,
+      category: slipCategory,
+      customCategoryNote: slipCategory === "other_exp" ? slipCustomNote.trim() : "",
+      date: pendingSlip.date,
+      time: slipTime.trim(),
+      note: pendingSlip.note || "นำเข้าจากสลิป",
+    };
+    setTransactions([newTx, ...transactions]);
+    setPendingSlip(null);
+    setScanMessage(`บันทึกรายจ่าย ${formatMoney(pendingSlip.amount)} บาท เรียบร้อยแล้ว`);
   };
 
   return (
@@ -250,12 +353,14 @@ function App() {
       {activeAnnouncement && (
         <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center border-2 border-amber-500">
+            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">📢</div>
             <h3 className="text-base font-extrabold text-gray-900">ประกาศสำคัญจากผู้ดูแลระบบ</h3>
-            <div className="bg-amber-50 p-4 rounded-2xl text-xs text-gray-800 text-left">{activeAnnouncement.text}</div>
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-gray-800 font-medium text-left">{activeAnnouncement.text}</div>
+            <p className="text-[10px] text-gray-400">ส่งเมื่อ: {activeAnnouncement.time}</p>
             {canCloseAnnouncement ? (
-              <button onClick={() => { localStorage.setItem("bp_closedAnnouncementId", activeAnnouncement.id); setActiveAnnouncement(null); }} className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold">✕ ปิดประกาศ</button>
+              <button onClick={() => { localStorage.setItem("bp_closedAnnouncementId", activeAnnouncement.id); setActiveAnnouncement(null); }} className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold">✕ ปิดประกาศนี้</button>
             ) : (
-              <div className="text-xs text-gray-400">⏳ กรุณารอสักครู่...</div>
+              <div className="text-xs text-gray-400">⏳ กรุณารอสักครู่ (สามารถปิดได้ใน 3 วินาที)...</div>
             )}
           </div>
         </div>
@@ -264,11 +369,26 @@ function App() {
       {onboardingStep === 1 && (
         <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <h3 className="text-lg font-extrabold text-gray-900">ยินดีต้อนรับ!</h3>
-            <form onSubmit={(e) => { e.preventDefault(); if (inputName.trim()) { setUserName(inputName.trim()); setOnboardingStep(null); } }} className="space-y-3">
-              <input type="text" placeholder="ชื่อของคุณ" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full px-4 py-3 border rounded-2xl text-sm text-center" required />
-              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold">เริ่มต้นใช้งาน</button>
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">👋</div>
+            <h3 className="text-lg font-extrabold text-gray-900">ยินดีต้อนรับสู่แอปงบประมาณ!</h3>
+            <p className="text-xs text-gray-500">กรุณาใส่ชื่อของคุณเพื่อเริ่มต้นใช้งาน</p>
+            <form onSubmit={(e) => { e.preventDefault(); if (inputName.trim()) { setUserName(inputName.trim()); setOnboardingStep(2); } }} className="space-y-3 pt-2">
+              <input type="text" placeholder="ชื่อของคุณ" value={inputName} onChange={(e) => setInputName(e.target.value)} className="w-full px-4 py-3 border rounded-2xl text-sm bg-gray-50 font-semibold text-center" required />
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold">ถัดไป ➔</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {onboardingStep === 2 && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <h3 className="text-lg font-extrabold text-gray-900">ตั้งค่ารูปโปรไฟล์</h3>
+            <div onClick={() => avatarInputRef.current?.click()} className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 cursor-pointer overflow-hidden border-2 border-dashed border-gray-300 mx-auto">
+              {userAvatar ? <img src={userAvatar} className="w-full h-full object-cover" /> : <span className="text-2xl">➕</span>}
+              <input type="file" ref={avatarInputRef} accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload=(ev)=>setUserAvatar(ev.target.result); r.readAsDataURL(f); } }} />
+            </div>
+            <button onClick={() => setOnboardingStep(null)} className="w-full py-3 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold">เสร็จสิ้น</button>
           </div>
         </div>
       )}
@@ -288,9 +408,108 @@ function App() {
                 <button onClick={() => { setActiveModal("transactions"); setIsMenuOpen(false); }} className="w-full flex justify-between items-center p-3.5 bg-gray-50 rounded-2xl text-xs font-bold text-gray-800">
                   <span>📜 รายการประวัติทั้งหมด ({transactions.length})</span><span>➔</span>
                 </button>
+                <button onClick={() => { setActiveModal("goals_detail"); setIsMenuOpen(false); }} className="w-full flex justify-between items-center p-3.5 bg-gray-50 rounded-2xl text-xs font-bold text-gray-800">
+                  <span>🎯 เป้าหมายการออมทั้งหมด</span><span>➔</span>
+                </button>
+                <button onClick={() => { setActiveModal("debts_detail"); setIsMenuOpen(false); }} className="w-full flex justify-between items-center p-3.5 bg-gray-50 rounded-2xl text-xs font-bold text-gray-800">
+                  <span>💰 เจ้าหนี้ / ลูกหนี้ทั้งหมด</span><span>➔</span>
+                </button>
               </div>
             </div>
-            <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="w-full py-3 bg-rose-50 text-rose-600 rounded-2xl text-xs font-bold">🗑️ รีเซ็ตบัญชีทั้งหมด</button>
+            <button onClick={() => { if(confirm("ลบข้อมูลและเริ่มต้นใหม่ทั้งหมด?")) { localStorage.clear(); window.location.reload(); } }} className="w-full py-3 bg-rose-50 text-rose-600 rounded-2xl text-xs font-bold">🗑️ รีเซ็ตบัญชีทั้งหมด</button>
+          </div>
+        </div>
+      )}
+
+      {activeModal === "chat_admin" && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl flex flex-col h-[80vh] overflow-hidden">
+            <div className="p-4 border-b flex justify-between items-center bg-[#1E1E1E] text-white shrink-0">
+              <h3 className="text-sm font-bold">แชทซัพพอร์ต & AI บอทอัจฉริยะ</h3>
+              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold p-1">✕</button>
+            </div>
+            <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50">
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className={`flex flex-col ${msg.sender === "admin" ? "items-start" : "items-end"}`}>
+                  <span className="text-[10px] text-gray-400 px-1 mb-0.5">{msg.senderName} • {msg.time}</span>
+                  <div className={`p-3 rounded-2xl text-xs max-w-[85%] whitespace-pre-wrap ${msg.sender === "admin" ? "bg-white border text-gray-800" : "bg-[#1E1E1E] text-white"}`}>{msg.text}</div>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={handleSendUserChat} className="p-3 border-t bg-white flex gap-2 shrink-0">
+              <input type="text" placeholder="พิมพ์ข้อความสอบถาม..." value={chatInput} onChange={(e) => setChatInput(e.target.value)} className="flex-1 px-4 py-2.5 border rounded-2xl text-xs bg-gray-50" required />
+              <button type="submit" className="px-5 py-2.5 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold">ส่ง</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {activeModal === "transactions" && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl flex flex-col h-[80vh] overflow-hidden p-6 space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-sm font-bold">ประวัติรายการทั้งหมด</h3>
+              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {transactions.length === 0 ? (
+                <p className="text-xs text-center text-gray-400 py-10">ยังไม่มีรายการบันทึก</p>
+              ) : (
+                transactions.map((t) => (
+                  <div key={t.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl border text-xs">
+                    <div>
+                      <p className="font-bold">{t.note || t.category}</p>
+                      <p className="text-[10px] text-gray-400">{t.date} {t.time}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`font-extrabold ${t.type === "income" ? "text-emerald-600" : "text-rose-600"}`}>
+                        {t.type === "income" ? "+" : "-"}{formatMoney(t.amount)} บ.
+                      </span>
+                      <button onClick={() => handleDeleteTransaction(t.id)} className="text-rose-500 font-bold text-sm">🗑️</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeModal === "add_tx" && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl p-6 space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-sm font-bold">เพิ่มรายการใหม่</h3>
+              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold">✕</button>
+            </div>
+            <form onSubmit={handleAddTransaction} className="space-y-3 text-xs">
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setType("expense")} className={`flex-1 py-2.5 rounded-xl font-bold border ${type === "expense" ? "bg-rose-500 text-white" : "bg-gray-50"}`}>รายจ่าย</button>
+                <button type="button" onClick={() => setType("income")} className={`flex-1 py-2.5 rounded-xl font-bold border ${type === "income" ? "bg-emerald-500 text-white" : "bg-gray-50"}`}>รายรับ</button>
+              </div>
+              <input type="number" placeholder="จำนวนเงิน (บาท)" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full p-3 border rounded-xl bg-gray-50 font-bold" required />
+              {type === "expense" && (
+                <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-3 border rounded-xl bg-gray-50 font-bold">
+                  {EXPENSE_CATEGORIES.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
+                </select>
+              )}
+              <input type="text" placeholder="บันทึกย่อ (เช่น มื้อเที่ยง)" value={note} onChange={(e) => setNote(e.target.value)} className="w-full p-3 border rounded-xl bg-gray-50" />
+              <button type="submit" className="w-full py-3 bg-[#1E1E1E] text-white rounded-2xl font-bold">✓ บันทึกรายการ</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {pendingSlip && (
+        <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-gray-900">🧾 ยืนยันสลิปโอนเงิน ({formatMoney(pendingSlip.amount)} บาท)</h3>
+            <form onSubmit={handleConfirmSlip} className="space-y-3 text-xs">
+              <select value={slipCategory} onChange={(e) => setSlipCategory(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl bg-gray-50 font-bold">
+                {EXPENSE_CATEGORIES.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
+              </select>
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl font-bold">✓ ยืนยันบันทึกรายจ่าย</button>
+            </form>
           </div>
         </div>
       )}
@@ -332,7 +551,7 @@ function App() {
           </div>
           <div className="bg-white rounded-3xl p-5 shadow-sm border space-y-2 flex flex-col justify-center gap-2">
             <button onClick={() => setActiveModal("add_tx")} className="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold">➕ เพิ่มรายรับ/รายจ่าย</button>
-            <button onClick={() => setActiveModal("add_goal")} className="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold">🎯 เพิ่มเป้าหมายออม</button>
+            <button onClick={() => setActiveModal("chat_admin")} className="w-full py-2 bg-blue-50 text-blue-800 hover:bg-blue-100 rounded-xl text-xs font-bold">💬 เปิดแชทซัพพอร์ต AI</button>
           </div>
         </div>
 
