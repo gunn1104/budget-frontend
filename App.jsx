@@ -111,6 +111,16 @@ function App() {
     return id;
   });
 
+  // บันทึกเวลาที่ผู้ใช้งานเปิดเข้าแอปครั้งแรกใน Session นี้ (ใช้เช็คว่าเข้ามาก่อนหรือหลังประกาศ)
+  const [sessionStartTime] = useState(() => {
+    let t = sessionStorage.getItem("bp_sessionStart");
+    if (!t) {
+      t = Date.now().toString();
+      sessionStorage.setItem("bp_sessionStart", t);
+    }
+    return Number(t);
+  });
+
   // Profile State
   const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "");
   const [userAvatar, setUserAvatar] = useState(() => localStorage.getItem("bp_userAvatar") || "");
@@ -232,7 +242,7 @@ function App() {
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // ระบบจัดการการเลื่อนหน้าจอที่ปลอดภัยและลื่นไหลที่สุด
+  // ระบบจัดการการเลื่อนหน้าจอ
   useEffect(() => {
     const hasOpenModal =
       activeModal !== null ||
@@ -353,7 +363,6 @@ function App() {
     return () => clearInterval(interval);
   }, [userName, userAvatar, totalBalance, deviceId]);
 
-  // ฟังก์ชันแปลงเวลาใช้งานล่าสุด (แก้ปัญหา Invalid Date สมบูรณ์)
   const formatUserStatus = (lastActiveTimestamp) => {
     if (!lastActiveTimestamp) return { text: "ออฟไลน์", isOnline: false };
     
@@ -373,7 +382,7 @@ function App() {
     }
   };
 
-  // ดึงข้อมูลคลาวด์และตรวจสอบประกาศ Admin
+  // ดึงข้อมูลคลาวด์และตรวจสอบประกาศ (แสดงเฉพาะคนที่ออนไลน์อยู่ตอนประกาศถูกส่ง)
   useEffect(() => {
     const fetchCloudData = async () => {
       try {
@@ -396,9 +405,15 @@ function App() {
         const annData = await annRes.json();
         
         if (annData && annData.text) {
-          // ตรวจสอบว่าผู้ใช้เคยกดปิดประกาศ ID นี้ไปแล้วหรือยัง
+          const announcementTime = Number(annData.id); // id คือ Timestamp ที่แอดมินกดส่ง
+          
+          // เงื่อนไข: ผู้ใช้ต้องเปิดเข้าแอป (sessionStartTime) ก่อนหรือทันทีที่ประกาศถูกส่ง
+          // ถ้าเข้ามาทีหลังประกาศ (sessionStartTime > announcementTime) จะไม่แสดงป๊อปอัปนี้
+          const isUserOnlineBeforeAnnouncement = sessionStartTime <= announcementTime + 5000; 
+
           const closedAnnId = localStorage.getItem("bp_closedAnnouncementId");
-          if (closedAnnId !== annData.id) {
+
+          if (isUserOnlineBeforeAnnouncement && closedAnnId !== annData.id) {
             setActiveAnnouncement((prev) => {
               if (!prev || prev.id !== annData.id) {
                 setCanCloseAnnouncement(false);
@@ -431,7 +446,7 @@ function App() {
     fetchCloudData();
     const interval = setInterval(fetchCloudData, 4000);
     return () => clearInterval(interval);
-  }, [deviceId, isAdminLoggedIn]);
+  }, [deviceId, isAdminLoggedIn, sessionStartTime]);
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -439,7 +454,6 @@ function App() {
     }
   }, [chatMessages, activeModal]);
 
-  // 🤖 ระบบ AI บอทอัจฉริยะวิเคราะห์เจตนา + ถามย้ำอัตโนมัติ
   const handleSendUserChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
@@ -540,14 +554,14 @@ function App() {
         body: JSON.stringify(annPayload),
       });
       setAnnouncementText("");
-      alert("ส่งประกาศแจ้งเตือนไปยังหน้าจอผู้ใช้ทุกคนเรียบร้อยแล้ว!");
+      alert("ส่งประกาศแจ้งเตือนไปยังผู้ใช้ที่กำลังออนไลน์อยู่เรียบร้อยแล้ว!");
     } catch (err) {
       console.error(err);
     }
   };
 
   const handleClearAnnouncement = async () => {
-    if (!confirm("ต้องการลบประกาศนี้ออกจากหน้าจอผู้ใช้ทั้งหมดใช่หรือไม่?")) return;
+    if (!confirm("ต้องการลบประกาศนี้ออกจากระบบใช่หรือไม่?")) return;
     try {
       await fetch(`${firebaseConfig.databaseURL}/announcement.json`, {
         method: "DELETE",
@@ -583,53 +597,8 @@ function App() {
       console.error(err);
     }
     localStorage.clear();
+    sessionStorage.clear();
     window.location.reload();
-  };
-
-  const confirmDelete = () => {
-    if (!itemToDelete) return;
-    if (itemToDelete.type === "transaction") {
-      setTransactions((prev) => prev.filter((t) => t.id !== itemToDelete.id));
-    } else if (itemToDelete.type === "debt") {
-      setDebts((prev) => prev.filter((d) => d.id !== itemToDelete.id));
-    } else if (itemToDelete.type === "goal") {
-      setSavingsGoals((prev) => prev.filter((g) => g.id !== itemToDelete.id));
-    } else if (itemToDelete.type === "budgetSet") {
-      const remaining = budgetSets.filter((s) => s.id !== itemToDelete.id);
-      setBudgetSets(remaining);
-      if (activeBudgetSetId === itemToDelete.id && remaining.length > 0) {
-        setActiveBudgetSetId(remaining[0].id);
-      } else if (remaining.length === 0) {
-        setActiveBudgetSetId("");
-      }
-    }
-    setItemToDelete(null);
-  };
-
-  const handleDepositGoal = (e) => {
-    e.preventDefault();
-    if (!goalToDeposit || !depositAmount || Number(depositAmount) <= 0) return;
-    setSavingsGoals((prev) =>
-      prev.map((g) => (g.id === goalToDeposit.id ? { ...g, current: (g.current || 0) + Number(depositAmount) } : g))
-    );
-    setGoalToDeposit(null);
-    setDepositAmount("");
-  };
-
-  const handleUpdateGoal = (e) => {
-    e.preventDefault();
-    if (!goalToEdit || !editGoalName || !editGoalTarget || Number(editGoalTarget) <= 0) return;
-    setSavingsGoals((prev) =>
-      prev.map((g) =>
-        g.id === goalToEdit.id
-          ? { ...g, name: editGoalName.trim(), target: Number(editGoalTarget), current: Number(editGoalCurrent) || 0 }
-          : g
-      )
-    );
-    setGoalToEdit(null);
-    setEditGoalName("");
-    setEditGoalTarget("");
-    setEditGoalCurrent("");
   };
 
   const handleAvatarChange = (e) => {
@@ -705,12 +674,10 @@ function App() {
     setScanMessage(`บันทึกรายจ่าย ${formatMoney(pendingSlip.amount)} บาท เรียบร้อยแล้ว`);
   };
 
-  const activeBudgetSet = budgetSets.find((s) => s.id === activeBudgetSetId) || budgetSets[0];
-
   return (
     <div className="min-h-screen bg-[#F7F5EF] text-[#2C2C2C] font-sans pb-12 relative">
 
-      {/* 🚨 แจ้งเตือนประกาศจาก Admin (แสดงเฉพาะครั้งเดียวจนกว่าจะเปลี่ยนประกาศใหม่) */}
+      {/* 🚨 แจ้งเตือนประกาศจาก Admin (แสดงเฉพาะผู้ที่ออนไลน์อยู่ก่อน/ตอนส่งประกาศเท่านั้น คนเข้าทีหลังจะไม่เห็น) */}
       {activeAnnouncement && (
         <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center border-2 border-amber-500">
@@ -742,97 +709,6 @@ function App() {
         </div>
       )}
 
-      {/* 🚀 ONBOARDING WIZARD */}
-      {onboardingStep === 1 && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              👋
-            </div>
-            <h3 className="text-lg font-extrabold text-gray-900">ยินดีต้อนรับสู่แอปงบประมาณ!</h3>
-            <p className="text-xs text-gray-500">กรุณาใส่ชื่อของคุณเพื่อเริ่มต้นใช้งานระบบ</p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (inputName.trim()) {
-                  setUserName(inputName.trim());
-                  setOnboardingStep(2);
-                }
-              }}
-              className="space-y-3 pt-2"
-            >
-              <input
-                type="text"
-                placeholder="ชื่อของคุณ (เช่น Gun)"
-                value={inputName}
-                onChange={(e) => setInputName(e.target.value)}
-                className="w-full px-4 py-3 border rounded-2xl text-sm bg-gray-50 font-semibold text-center"
-                required
-              />
-              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold shadow-md">
-                ถัดไป ➔
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {onboardingStep === 2 && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              📷
-            </div>
-            <h3 className="text-lg font-extrabold text-gray-900">ตั้งค่ารูปโปรไฟล์</h3>
-            <p className="text-xs text-gray-500">คุณสามารถอัปโหลดรูปภาพโปรไฟล์ของคุณได้ (หรือจะข้ามไปก่อนก็ได้)</p>
-            
-            <div className="py-2 flex justify-center">
-              <div
-                onClick={() => avatarInputRef.current?.click()}
-                className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 cursor-pointer overflow-hidden border-2 border-dashed border-gray-300 mx-auto shadow-inner"
-              >
-                {userAvatar ? <img src={userAvatar} className="w-full h-full object-cover" /> : <span className="text-2xl">➕</span>}
-                <input type="file" ref={avatarInputRef} accept="image/*" className="hidden" onChange={handleAvatarChange} />
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => setOnboardingStep(3)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">
-                ข้ามขั้นตอนนี้
-              </button>
-              <button onClick={() => setOnboardingStep(3)} className="flex-1 py-3 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold">
-                ถัดไป ➔
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {onboardingStep === 3 && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              💡
-            </div>
-            <h3 className="text-lg font-extrabold text-gray-900">ต้องการแนะนำวิธีใช้งานไหม?</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              เรามีระบบทัวร์แนะนำ 6 ขั้นตอนครอบคลุมทุกฟังก์ชัน เพื่อให้คุณใช้งานได้คล่องทันที คุณต้องการรับชมไหมครับ?
-            </p>
-            <div className="space-y-2 pt-2">
-              <button
-                onClick={() => { setOnboardingStep(null); setTutorialStep(1); }}
-                className="w-full py-3 bg-[#1B5E20] text-white rounded-2xl text-xs font-bold shadow-md"
-              >
-                ✨ เริ่มทัวร์แนะนำการใช้งาน (6 ขั้นตอน)
-              </button>
-              <button onClick={() => setOnboardingStep(null)} className="w-full py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">
-                ข้ามไปหน้าหลักเลย
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ☰ Side Menu Drawer */}
       {isMenuOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex">
@@ -858,12 +734,6 @@ function App() {
                 >
                   <span>📜 รายการประวัติทั้งหมด ({transactions.length})</span>
                   <span>➔</span>
-                </button>
-              </div>
-
-              <div className="pt-4 border-t space-y-2">
-                <button onClick={() => { setShowReportModal(true); setIsMenuOpen(false); }} className="w-full text-left text-xs text-rose-600 hover:text-rose-800 py-2 font-semibold">
-                  🚨 แจ้งปัญหาการใช้งาน
                 </button>
               </div>
             </div>
@@ -1055,14 +925,14 @@ function App() {
 
             <div className="bg-white p-4 rounded-2xl border border-amber-200 space-y-3 shadow-sm">
               <h4 className="text-xs font-extrabold text-amber-800 flex items-center gap-1.5">
-                <span>📢</span> ส่งข้อความประกาศแจ้งเตือน (เด้งขึ้นหน้าจอผู้ใช้)
+                <span>📢</span> ส่งข้อความประกาศแจ้งเตือน (เด้งเฉพาะผู้ที่ออนไลน์อยู่ขณะนี้)
               </h4>
               <form onSubmit={handleSendAnnouncement} className="space-y-2">
                 <textarea rows="2" placeholder="พิมพ์ข้อความประกาศ..." value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs bg-gray-50 font-medium" required />
                 <div className="flex gap-2">
-                  <button type="submit" className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm">🚀 ส่งประกาศเด้งหน้าจอผู้ใช้</button>
+                  <button type="submit" className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm">🚀 ส่งประกาศเด้งเฉพาะคนออนไลน์</button>
                   {activeAnnouncement && (
-                    <button type="button" onClick={handleClearAnnouncement} className="py-2 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold border border-rose-200">🗑️ ปิดประกาศ</button>
+                    <button type="button" onClick={handleClearAnnouncement} className="py-2 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold border border-rose-200">🗑️ ลบประกาศ</button>
                   )}
                 </div>
               </form>
@@ -1107,27 +977,6 @@ function App() {
                 </div>
               )}
             </div>
-
-            <div className="space-y-2 pt-3 border-t border-[#EADBBD]">
-              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                <span>📋</span> รายการแจ้งปัญหา ({reports.length} รายการ)
-              </h4>
-              {reports.length > 0 ? (
-                <div className="max-h-40 overflow-y-auto space-y-2">
-                  {reports.map((r) => (
-                    <div key={r.id} className="bg-white p-3 rounded-2xl border border-rose-100 text-xs shadow-sm">
-                      <div className="flex justify-between text-gray-400 text-[10px] mb-1">
-                        <span className="font-bold text-rose-600">👤 {r.userName}</span>
-                        <span>{r.date}</span>
-                      </div>
-                      <p className="text-gray-800 font-medium">{r.text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[11px] text-gray-400">ยังไม่มีรายการแจ้งปัญหาในขณะนี้</p>
-              )}
-            </div>
           </div>
         )}
 
@@ -1149,26 +998,9 @@ function App() {
                 </div>
               </div>
             </div>
-
-            <div className="bg-[#1E1E1E] text-white rounded-3xl p-6 shadow-md space-y-5">
-              <div>
-                <p className="text-xs text-gray-400">คงเหลือทั้งหมด</p>
-                <h2 className="text-3xl font-extrabold mt-1">
-                  {formatMoney(totalBalance)} <span className="text-sm font-normal text-gray-400">บาท</span>
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-800 text-xs">
-                <div><span className="text-gray-400">↗ รายรับ </span><span className="font-bold text-emerald-400">{formatMoney(totalIncome)}</span></div>
-                <div><span className="text-gray-400">↘ รายจ่าย </span><span className="font-bold text-rose-400">{formatMoney(totalExpense)}</span></div>
-                <div><span className="text-gray-400">ธนาคาร </span><span className="font-bold text-gray-200">{formatMoney(calcBankTotal)} บ.</span></div>
-                <div><span className="text-gray-400">เงินสด </span><span className="font-bold text-gray-200">{formatMoney(calcCashTotal)} บ.</span></div>
-              </div>
-            </div>
           </div>
 
           <div className="lg:col-span-7 space-y-4">
-            {/* นำเข้าสลิปทีละ 1 รูป */}
             <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
               <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน (เลือกทีละ 1 รูปไม่ใช่เลือกทีละหลายคน)</h2>
               <div
