@@ -111,7 +111,6 @@ function App() {
     return id;
   });
 
-  // บันทึกเวลาที่ผู้ใช้งานเปิดเข้าแอปครั้งแรกใน Session นี้ (ใช้เช็คว่าเข้ามาก่อนหรือหลังประกาศ)
   const [sessionStartTime] = useState(() => {
     let t = sessionStorage.getItem("bp_sessionStart");
     if (!t) {
@@ -242,7 +241,7 @@ function App() {
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // ระบบจัดการการเลื่อนหน้าจอ
+  // ป้องกันหน้าจอค้าง เลื่อนลงไม่ได้
   useEffect(() => {
     const hasOpenModal =
       activeModal !== null ||
@@ -365,7 +364,6 @@ function App() {
 
   const formatUserStatus = (lastActiveTimestamp) => {
     if (!lastActiveTimestamp) return { text: "ออฟไลน์", isOnline: false };
-    
     const timeNum = Number(lastActiveTimestamp);
     if (isNaN(timeNum)) return { text: "⚪ ไม่ระบุเวลา", isOnline: false };
 
@@ -382,7 +380,7 @@ function App() {
     }
   };
 
-  // ดึงข้อมูลคลาวด์และตรวจสอบประกาศ (แสดงเฉพาะคนที่ออนไลน์อยู่ตอนประกาศถูกส่ง)
+  // ดึงข้อมูลคลาวด์และตรวจสอบประกาศ Admin (เฉพาะคนออนไลน์ตอนส่ง)
   useEffect(() => {
     const fetchCloudData = async () => {
       try {
@@ -405,12 +403,8 @@ function App() {
         const annData = await annRes.json();
         
         if (annData && annData.text) {
-          const announcementTime = Number(annData.id); // id คือ Timestamp ที่แอดมินกดส่ง
-          
-          // เงื่อนไข: ผู้ใช้ต้องเปิดเข้าแอป (sessionStartTime) ก่อนหรือทันทีที่ประกาศถูกส่ง
-          // ถ้าเข้ามาทีหลังประกาศ (sessionStartTime > announcementTime) จะไม่แสดงป๊อปอัปนี้
+          const announcementTime = Number(annData.id);
           const isUserOnlineBeforeAnnouncement = sessionStartTime <= announcementTime + 5000; 
-
           const closedAnnId = localStorage.getItem("bp_closedAnnouncementId");
 
           if (isUserOnlineBeforeAnnouncement && closedAnnId !== annData.id) {
@@ -601,12 +595,101 @@ function App() {
     window.location.reload();
   };
 
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    if (itemToDelete.type === "transaction") {
+      setTransactions((prev) => prev.filter((t) => t.id !== itemToDelete.id));
+    } else if (itemToDelete.type === "debt") {
+      setDebts((prev) => prev.filter((d) => d.id !== itemToDelete.id));
+    } else if (itemToDelete.type === "goal") {
+      setSavingsGoals((prev) => prev.filter((g) => g.id !== itemToDelete.id));
+    } else if (itemToDelete.type === "budgetSet") {
+      const remaining = budgetSets.filter((s) => s.id !== itemToDelete.id);
+      setBudgetSets(remaining);
+      if (activeBudgetSetId === itemToDelete.id && remaining.length > 0) {
+        setActiveBudgetSetId(remaining[0].id);
+      } else if (remaining.length === 0) {
+        setActiveBudgetSetId("");
+      }
+    }
+    setItemToDelete(null);
+  };
+
+  const handleDepositGoal = (e) => {
+    e.preventDefault();
+    if (!goalToDeposit || !depositAmount || Number(depositAmount) <= 0) return;
+    setSavingsGoals((prev) =>
+      prev.map((g) => (g.id === goalToDeposit.id ? { ...g, current: (g.current || 0) + Number(depositAmount) } : g))
+    );
+    setGoalToDeposit(null);
+    setDepositAmount("");
+  };
+
+  const handleUpdateGoal = (e) => {
+    e.preventDefault();
+    if (!goalToEdit || !editGoalName || !editGoalTarget || Number(editGoalTarget) <= 0) return;
+    setSavingsGoals((prev) =>
+      prev.map((g) =>
+        g.id === goalToEdit.id
+          ? { ...g, name: editGoalName.trim(), target: Number(editGoalTarget), current: Number(editGoalCurrent) || 0 }
+          : g
+      )
+    );
+    setGoalToEdit(null);
+    setEditGoalName("");
+    setEditGoalTarget("");
+    setEditGoalCurrent("");
+  };
+
+  const handleSaveNewBudgetSet = (e) => {
+    e.preventDefault();
+    if (!newSetName || !newSetTotal || Number(newSetTotal) <= 0) return;
+    const newId = Date.now().toString();
+    const newSet = {
+      id: newId,
+      name: newSetName.trim(),
+      totalBudget: Number(newSetTotal),
+      items: { ...setAllocations },
+      customLabels: { ...setCustomLabels },
+    };
+    setBudgetSets((prev) => [...prev, newSet]);
+    setActiveBudgetSetId(newId);
+    setNewSetName("");
+    setNewSetTotal("");
+    setSetAllocations({});
+    setSetCustomLabels({});
+    alert("บันทึกเซ็ตแผนการเงินเรียบร้อยแล้ว!");
+  };
+
   const handleAvatarChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (ev) => setUserAvatar(ev.target.result);
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSendReport = async (e) => {
+    e.preventDefault();
+    if (!reportText.trim()) return;
+    const reportPayload = {
+      id: Date.now().toString(),
+      userName: userName || "ผู้ใช้ทั่วไป",
+      text: reportText.trim(),
+      date: new Date().toLocaleString("th-TH"),
+    };
+    try {
+      await fetch(`${firebaseConfig.databaseURL}/reports/${reportPayload.id}.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reportPayload),
+      });
+      setReportText("");
+      setShowReportModal(false);
+      alert("ส่งรายงานปัญหาถึงผู้ดูแลระบบเรียบร้อยแล้ว");
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -674,10 +757,95 @@ function App() {
     setScanMessage(`บันทึกรายจ่าย ${formatMoney(pendingSlip.amount)} บาท เรียบร้อยแล้ว`);
   };
 
+  const handleAddTransaction = (e) => {
+    e.preventDefault();
+    if (!amount || Number(amount) <= 0) return;
+    const newTx = {
+      id: Date.now().toString(),
+      type,
+      account,
+      amount: Number(amount),
+      category,
+      customCategoryNote: category === "other_exp" ? customCategoryNote.trim() : "",
+      date,
+      time: time.trim(),
+      note,
+    };
+    setTransactions((prev) => [newTx, ...prev]);
+    setAmount("");
+    setNote("");
+    setCustomCategoryNote("");
+    setTime("");
+    setActiveModal(null);
+  };
+
+  const handleAddGoal = (e) => {
+    e.preventDefault();
+    if (!goalName || !goalTarget || Number(goalTarget) <= 0) return;
+    setSavingsGoals((prev) => [
+      ...prev,
+      { id: Date.now().toString(), name: goalName, target: Number(goalTarget), current: Number(goalCurrent) || 0 },
+    ]);
+    setGoalName("");
+    setGoalTarget("");
+    setGoalCurrent("");
+    setActiveModal(null);
+  };
+
+  const handleAddDebt = (e) => {
+    e.preventDefault();
+    if (!debtAmount || Number(debtAmount) <= 0) return;
+    setDebts((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        type: debtType,
+        note: debtNote,
+        amount: Number(debtAmount),
+        person: debtPerson,
+        dueDate: debtDueDate,
+      },
+    ]);
+    setDebtNote("");
+    setDebtAmount("");
+    setDebtPerson("");
+    setDebtDueDate("");
+    setActiveModal(null);
+  };
+
+  const handleAdjustBank = () => {
+    if (!bankRealInput) return;
+    const realVal = Number(bankRealInput);
+    const calculatedBank = transactions.reduce(
+      (acc, t) => (t.account === "bank" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
+      0
+    );
+    setAccountAdjustments((prev) => ({ ...prev, bank: realVal - calculatedBank }));
+    setBankRealInput("");
+  };
+
+  const handleAdjustCash = () => {
+    if (!cashRealInput) return;
+    const realVal = Number(cashRealInput);
+    const calculatedCash = transactions.reduce(
+      (acc, t) => (t.account === "cash" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
+      0
+    );
+    setAccountAdjustments((prev) => ({ ...prev, cash: realVal - calculatedCash }));
+    setCashRealInput("");
+  };
+
+  const activeBudgetSet = budgetSets.find((s) => s.id === activeBudgetSetId) || budgetSets[0];
+  const totalAllocated = activeBudgetSet ? Object.values(activeBudgetSet.items).reduce((a, b) => a + Number(b), 0) : 0;
+  const remainingBudget = activeBudgetSet ? activeBudgetSet.totalBudget - totalAllocated : 0;
+
+  const newSetTotalAllocated = Object.values(setAllocations).reduce((a, b) => a + Number(b), 0);
+  const newSetRemaining = (Number(newSetTotal) || 0) - newSetTotalAllocated;
+
   return (
     <div className="min-h-screen bg-[#F7F5EF] text-[#2C2C2C] font-sans pb-12 relative">
 
-      {/* 🚨 แจ้งเตือนประกาศจาก Admin (แสดงเฉพาะผู้ที่ออนไลน์อยู่ก่อน/ตอนส่งประกาศเท่านั้น คนเข้าทีหลังจะไม่เห็น) */}
+      {/* 🚨 แจ้งเตือนประกาศจาก Admin (เฉพาะคนที่ออนไลน์อยู่ตอนส่ง) */}
       {activeAnnouncement && (
         <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center border-2 border-amber-500">
@@ -709,6 +877,174 @@ function App() {
         </div>
       )}
 
+      {/* 🚀 ONBOARDING WIZARD */}
+      {onboardingStep === 1 && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
+              👋
+            </div>
+            <h3 className="text-lg font-extrabold text-gray-900">ยินดีต้อนรับสู่แอปงบประมาณ!</h3>
+            <p className="text-xs text-gray-500">กรุณาใส่ชื่อของคุณเพื่อเริ่มต้นใช้งานระบบ</p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (inputName.trim()) {
+                  setUserName(inputName.trim());
+                  setOnboardingStep(2);
+                }
+              }}
+              className="space-y-3 pt-2"
+            >
+              <input
+                type="text"
+                placeholder="ชื่อของคุณ (เช่น Gun)"
+                value={inputName}
+                onChange={(e) => setInputName(e.target.value)}
+                className="w-full px-4 py-3 border rounded-2xl text-sm bg-gray-50 font-semibold text-center"
+                required
+              />
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold shadow-md">
+                ถัดไป ➔
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {onboardingStep === 2 && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
+              📷
+            </div>
+            <h3 className="text-lg font-extrabold text-gray-900">ตั้งค่ารูปโปรไฟล์</h3>
+            <p className="text-xs text-gray-500">คุณสามารถอัปโหลดรูปภาพโปรไฟล์ของคุณได้ (หรือจะข้ามไปก่อนก็ได้)</p>
+            
+            <div className="py-2 flex justify-center">
+              <div
+                onClick={() => avatarInputRef.current?.click()}
+                className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 cursor-pointer overflow-hidden border-2 border-dashed border-gray-300 mx-auto shadow-inner"
+              >
+                {userAvatar ? <img src={userAvatar} className="w-full h-full object-cover" /> : <span className="text-2xl">➕</span>}
+                <input type="file" ref={avatarInputRef} accept="image/*" className="hidden" onChange={handleAvatarChange} />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setOnboardingStep(3)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">
+                ข้ามขั้นตอนนี้
+              </button>
+              <button onClick={() => setOnboardingStep(3)} className="flex-1 py-3 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold">
+                ถัดไป ➔
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {onboardingStep === 3 && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
+              💡
+            </div>
+            <h3 className="text-lg font-extrabold text-gray-900">ต้องการแนะนำวิธีใช้งานไหม?</h3>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              เรามีระบบทัวร์แนะนำ 6 ขั้นตอนครอบคลุมทุกฟังก์ชัน เพื่อให้คุณใช้งานได้คล่องทันที คุณต้องการรับชมไหมครับ?
+            </p>
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => { setOnboardingStep(null); setTutorialStep(1); }}
+                className="w-full py-3 bg-[#1B5E20] text-white rounded-2xl text-xs font-bold shadow-md"
+              >
+                ✨ เริ่มทัวร์แนะนำการใช้งาน (6 ขั้นตอน)
+              </button>
+              <button onClick={() => setOnboardingStep(null)} className="w-full py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">
+                ข้ามไปหน้าหลักเลย
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🗺️ ระบบสอนใช้งานแบบทัวร์ 6 ขั้นตอน */}
+      {tutorialStep > 0 && (
+        <div className="fixed inset-0 bg-black/80 z-[250] flex flex-col items-center justify-center p-6 text-center text-white">
+          <div className="max-w-sm w-full space-y-4 bg-[#1E1E1E] p-6 rounded-3xl border border-gray-700 shadow-2xl text-left">
+            <div className="flex justify-between items-center text-xs text-gray-400 font-bold border-b border-gray-800 pb-2">
+              <span>คู่มือการใช้งานระบบ</span>
+              <span className="text-emerald-400">ขั้นตอนที่ {tutorialStep} จาก 6</span>
+            </div>
+
+            {tutorialStep === 1 && (
+              <div className="space-y-2">
+                <div className="text-2xl">👋</div>
+                <h4 className="text-sm font-bold text-emerald-400">1. ยินดีต้อนรับสู่แอปจัดการการเงิน</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">แอปนี้ออกแบบมาให้คุณจัดการเงิน เก็บออม และตรวจสอบสถานะทางการเงินได้อย่างรวดเร็วในหน้าจอเดียว!</p>
+              </div>
+            )}
+            {tutorialStep === 2 && (
+              <div className="space-y-2">
+                <div className="text-2xl">📊</div>
+                <h4 className="text-sm font-bold text-emerald-400">2. ยอดเงินคงเหลือและกราฟวงกลม</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">การ์ดสีดำด้านซ้ายจะสรุปยอดเงินทั้งหมดของคุณ และมีกราฟวงกลมแสดงสัดส่วนรายจ่ายให้เห็นชัดเจน</p>
+              </div>
+            )}
+            {tutorialStep === 3 && (
+              <div className="space-y-2">
+                <div className="text-2xl">📸</div>
+                <h4 className="text-sm font-bold text-emerald-400">3. สแกนสลิปอัจฉริยะ</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">ไม่ต้องพิมพ์เอง! แค่เลือกรูปสลิปโอนเงิน ระบบจะดึงยอดเงินและวันที่ให้อัตโนมัติ พร้อมให้คุณเลือกหมวดหมู่</p>
+              </div>
+            )}
+            {tutorialStep === 4 && (
+              <div className="space-y-2">
+                <div className="text-2xl">➕</div>
+                <h4 className="text-sm font-bold text-emerald-400">4. บันทึกข้อมูล & เจ้าหนี้/ลูกหนี้</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">ใช้ปุ่มเพิ่มข้อมูลด้านล่างเพื่อจดรายรับ-รายจ่าย หรือบันทึกรายการเจ้าหนี้/ลูกหนี้</p>
+              </div>
+            )}
+            {tutorialStep === 5 && (
+              <div className="space-y-2">
+                <div className="text-2xl">🎯</div>
+                <h4 className="text-sm font-bold text-emerald-400">5. เป้าหมายการออม & วางแผนงบ</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">ตั้งเป้าหมายเก็บเงินและจัดสรรงบเป็นเซ็ตล่วงหน้า (เช่น Set 1, Set 2)</p>
+              </div>
+            )}
+            {tutorialStep === 6 && (
+              <div className="space-y-2">
+                <div className="text-2xl">☰</div>
+                <h4 className="text-sm font-bold text-emerald-400">6. เมนูเพิ่มเติม (3 ขีดซ้ายบน)</h4>
+                <p className="text-xs text-gray-300 leading-relaxed">กดปุ่ม 3 ขีดเพื่อเปิดดูประวัติย้อนหลัง, แชทคุยกับแอดมินหรือบอท AI, หรือปรับยอดเงินสด/ธนาคาร</p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-3">
+              {tutorialStep > 1 && (
+                <button onClick={() => setTutorialStep((prev) => prev - 1)} className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold">
+                  ← ย้อนกลับ
+                </button>
+              )}
+              {tutorialStep < 6 ? (
+                <button onClick={() => setTutorialStep((prev) => prev + 1)} className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold">
+                  ถัดไป ➔
+                </button>
+              ) : (
+                <button onClick={() => setTutorialStep(0)} className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold">
+                  🎉 จบการแนะนำ เริ่มใช้งานเลย
+                </button>
+              )}
+            </div>
+            <div className="text-center pt-1">
+              <button onClick={() => setTutorialStep(0)} className="text-[11px] text-gray-400 hover:text-white underline">
+                ข้ามการแนะนำ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ☰ Side Menu Drawer */}
       {isMenuOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex">
@@ -734,6 +1070,47 @@ function App() {
                 >
                   <span>📜 รายการประวัติทั้งหมด ({transactions.length})</span>
                   <span>➔</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveModal("budget_planner"); setIsMenuOpen(false); }}
+                  className="w-full flex justify-between items-center p-3.5 bg-emerald-50 hover:bg-emerald-100 rounded-2xl text-xs font-bold text-emerald-800 border border-emerald-200"
+                >
+                  <span>🗺️ วางแผนการเงิน / จัดสรรงบ (เซ็ต Set 1, 2...)</span>
+                  <span>➔</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveModal("categories_detail"); setIsMenuOpen(false); }}
+                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
+                >
+                  <span>📊 สรุปใช้จ่ายตามหมวดหมู่ (ละเอียดยิบ)</span>
+                  <span>➔</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveModal("goals_detail"); setIsMenuOpen(false); }}
+                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
+                >
+                  <span>🎯 เป้าหมายการออม (รายละเอียดทั้งหมด)</span>
+                  <span>➔</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveModal("adjust"); setIsMenuOpen(false); }}
+                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
+                >
+                  <span>⚖️ ปรับยอดให้ตรงกับบัญชีจริง</span>
+                  <span>➔</span>
+                </button>
+              </div>
+
+              <div className="pt-4 border-t space-y-2">
+                <button onClick={() => { setTutorialStep(1); setIsMenuOpen(false); }} className="w-full text-left text-xs text-emerald-600 hover:text-emerald-800 py-2 font-semibold">
+                  💡 เปิดดูคู่มือแนะนำการใช้งาน (6 ขั้นตอน)
+                </button>
+                <button onClick={() => { setShowReportModal(true); setIsMenuOpen(false); }} className="w-full text-left text-xs text-rose-600 hover:text-rose-800 py-2 font-semibold">
+                  🚨 แจ้งปัญหาการใช้งาน
                 </button>
               </div>
             </div>
@@ -840,6 +1217,109 @@ function App() {
               <button type="submit" className="px-5 py-2.5 bg-[#8C6D23] text-white rounded-2xl text-xs font-bold shadow-sm">
                 ส่งข้อความ
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal เพิ่มรายรับ-รายจ่าย */}
+      {activeModal === "add_tx" && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-base font-bold text-gray-800">➕ เพิ่มรายการใหม่</h3>
+              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-lg">✕</button>
+            </div>
+            <form onSubmit={handleAddTransaction} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => { setType("expense"); setCategory("food"); }} className={`py-2 rounded-xl font-bold border ${type === "expense" ? "bg-rose-600 text-white border-rose-600" : "bg-gray-50 text-gray-600"}`}>รายจ่าย</button>
+                <button type="button" onClick={() => { setType("income"); setCategory("salary"); }} className={`py-2 rounded-xl font-bold border ${type === "income" ? "bg-emerald-600 text-white border-emerald-600" : "bg-gray-50 text-gray-600"}`}>รายรับ</button>
+              </div>
+
+              <div>
+                <label className="text-gray-500 block mb-1">บัญชี</label>
+                <select value={account} onChange={(e) => setAccount(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl bg-gray-50 font-bold">
+                  {ACCOUNTS.map((a) => (<option key={a.key} value={a.key}>{a.label}</option>))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-gray-500 block mb-1">จำนวนเงิน (บาท)</label>
+                <input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl bg-gray-50 font-bold text-sm" required />
+              </div>
+
+              <div>
+                <label className="text-gray-500 block mb-1">หมวดหมู่</label>
+                <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl bg-gray-50 font-bold">
+                  {(type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
+                </select>
+              </div>
+
+              {category === "other_exp" && (
+                <div>
+                  <label className="text-gray-500 block mb-1">ระบุรายละเอียด (ค่าอะไร?)</label>
+                  <input type="text" placeholder="เช่น ค่าซ่อมรถ" value={customCategoryNote} onChange={(e) => setCustomCategoryNote(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" required />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-gray-500 block mb-1">วันที่</label>
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" />
+                </div>
+                <div>
+                  <label className="text-gray-500 block mb-1">เวลา (ไม่ใส่ก็ได้)</label>
+                  <input type="text" placeholder="14:30" value={time} onChange={(e) => setTime(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-gray-500 block mb-1">หมายเหตุเพิ่มเติม</label>
+                <input type="text" placeholder="เช่น ซื้อของเซเว่น" value={note} onChange={(e) => setNote(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" />
+              </div>
+
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-xl font-bold">✓ บันทึกรายการ</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal เพิ่มเป้าหมายออม */}
+      {activeModal === "add_goal" && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="text-base font-bold text-gray-800">🎯 เพิ่มเป้าหมายการออม</h3>
+              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-lg">✕</button>
+            </div>
+            <form onSubmit={handleAddGoal} className="space-y-3 text-xs">
+              <input type="text" placeholder="ชื่อเป้าหมาย (เช่น ซื้อไอโฟน)" value={goalName} onChange={(e) => setGoalName(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
+              <input type="number" placeholder="เป้าหมายเงิน (บาท)" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
+              <input type="number" placeholder="เงินเก็บเริ่มต้น (ถ้ามี)" value={goalCurrent} onChange={(e) => setGoalCurrent(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" />
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-xl font-bold">สร้างเป้าหมาย</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal เพิ่มเจ้าหนี้/ลูกหนี้ */}
+      {activeModal === "add_debt" && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="text-base font-bold text-gray-800">🤝 บันทึกเจ้าหนี้/ลูกหนี้</h3>
+              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-lg">✕</button>
+            </div>
+            <form onSubmit={handleAddDebt} className="space-y-3 text-xs">
+              <select value={debtType} onChange={(e) => setDebtType(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-bold">
+                <option value="creditor">เจ้าหนี้ (เราติดเงินเขา)</option>
+                <option value="debtor">ลูกหนี้ (เขาติดเงินเรา)</option>
+                <option value="reimburse">รอเบิกคืน</option>
+              </select>
+              <input type="text" placeholder="ชื่อบุคคล / รายการ" value={debtPerson} onChange={(e) => setDebtPerson(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
+              <input type="number" placeholder="จำนวนเงิน" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
+              <input type="date" value={debtDueDate} onChange={(e) => setDebtDueDate(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" />
+              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-xl font-bold">บันทึกรายการ</button>
             </form>
           </div>
         </div>
@@ -998,9 +1478,84 @@ function App() {
                 </div>
               </div>
             </div>
+
+            <div className="bg-[#1E1E1E] text-white rounded-3xl p-6 shadow-md space-y-5">
+              <div>
+                <p className="text-xs text-gray-400">คงเหลือทั้งหมด</p>
+                <h2 className="text-3xl font-extrabold mt-1">
+                  {formatMoney(totalBalance)} <span className="text-sm font-normal text-gray-400">บาท</span>
+                </h2>
+              </div>
+
+              <div className="pt-3 border-t border-gray-800 space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-300 font-bold">📊 สัดส่วนรายจ่ายคร่าวๆ</span>
+                  <span className="text-gray-400 font-medium">รวม: {formatMoney(totalExpense)} บ.</span>
+                </div>
+
+                {categoryExpenses.length === 0 ? (
+                  <p className="text-[11px] text-gray-500 text-center py-2">ยังไม่มีข้อมูลรายจ่ายในระบบ</p>
+                ) : (
+                  <div className="flex items-center gap-4 py-1">
+                    <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
+                      <div className="w-full h-full rounded-full shadow-inner" style={{ background: `conic-gradient(${generatePieChartGradient()})` }} />
+                      <div className="absolute inset-2 bg-[#1E1E1E] rounded-full flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-gray-300">EXP</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-1.5 max-h-28 overflow-y-auto pr-1">
+                      {categoryExpenses.map((cat) => {
+                        const percent = totalExpense > 0 ? ((cat.sum / totalExpense) * 100).toFixed(0) : 0;
+                        return (
+                          <div key={cat.key} className="flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                              <span className="text-gray-300 truncate max-w-[90px]">{cat.label}</span>
+                            </div>
+                            <span className="font-bold text-rose-400">~{percent}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-800 text-xs">
+                <div><span className="text-gray-400">↗ รายรับ </span><span className="font-bold text-emerald-400">{formatMoney(totalIncome)}</span></div>
+                <div><span className="text-gray-400">↘ รายจ่าย </span><span className="font-bold text-rose-400">{formatMoney(totalExpense)}</span></div>
+                <div><span className="text-gray-400">ธนาคาร </span><span className="font-bold text-gray-200">{formatMoney(calcBankTotal)} บ.</span></div>
+                <div><span className="text-gray-400">เงินสด </span><span className="font-bold text-gray-200">{formatMoney(calcCashTotal)} บ.</span></div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 flex flex-wrap gap-2 justify-center">
+              <button onClick={() => setActiveModal("add_tx")} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">➕ เพิ่มรายรับ/รายจ่าย</button>
+              <button onClick={() => setActiveModal("add_debt")} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">🤝 เพิ่มเจ้าหนี้/ลูกหนี้</button>
+              <button onClick={() => setActiveModal("add_goal")} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">🎯 เพิ่มเป้าหมายออม</button>
+            </div>
           </div>
 
           <div className="lg:col-span-7 space-y-4">
+            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
+              <h2 className="text-sm font-bold text-[#1E1E1E]">สรุป เจ้าหนี้ / ลูกหนี้ / รายการเบิก</h2>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="bg-rose-50 p-3 rounded-2xl border border-rose-100">
+                  <p className="text-rose-600 font-medium text-[11px]">เจ้าหนี้ (เราติด)</p>
+                  <p className="text-base font-extrabold text-rose-700 mt-1">{formatMoney(totalCreditor)} บ.</p>
+                </div>
+                <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
+                  <p className="text-emerald-600 font-medium text-[11px]">ลูกหนี้ (ใครติดเรา)</p>
+                  <p className="text-base font-extrabold text-emerald-700 mt-1">{formatMoney(totalDebtor)} บ.</p>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100">
+                  <p className="text-blue-600 font-medium text-[11px]">รอเบิกคืน</p>
+                  <p className="text-base font-extrabold text-blue-700 mt-1">{formatMoney(totalReimburse)} บ.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* นำเข้าสลิปทีละ 1 รูป */}
             <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
               <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน (เลือกทีละ 1 รูปไม่ใช่เลือกทีละหลายคน)</h2>
               <div
