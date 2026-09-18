@@ -101,7 +101,7 @@ function resizeImage(file, maxDim = 1024) {
   });
 }
 
-function App() {
+export default function App() {
   const [deviceId] = useState(() => {
     let id = localStorage.getItem("bp_deviceId");
     if (!id) {
@@ -184,7 +184,6 @@ function App() {
   // Admin Broadcast Announcement State
   const [announcementText, setAnnouncementText] = useState("");
   const [activeAnnouncement, setActiveAnnouncement] = useState(null);
-  const [canCloseAnnouncement, setCanCloseAnnouncement] = useState(false);
 
   const [itemToDelete, setItemToDelete] = useState(null);
 
@@ -236,7 +235,7 @@ function App() {
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // ควบคุมการเลื่อนหน้าจอ
+  // ควบคุมการเลื่อนหน้าจอเมื่อเปิด Modal
   useEffect(() => {
     const isAnyModalOpen =
       activeModal ||
@@ -331,7 +330,7 @@ function App() {
   useEffect(() => localStorage.setItem("bp_budgetSets", JSON.stringify(budgetSets)), [budgetSets]);
   useEffect(() => localStorage.setItem("bp_activeBudgetSetId", activeBudgetSetId), [activeBudgetSetId]);
 
-  // ส่ง Heartbeat สถานะออนไลน์
+  // ส่ง Heartbeat สถานะออนไลน์ไปยัง Firebase
   useEffect(() => {
     if (!userName) return;
     const sendHeartbeat = async () => {
@@ -358,20 +357,7 @@ function App() {
     return () => clearInterval(interval);
   }, [userName, userAvatar, totalBalance, deviceId]);
 
-  const formatUserStatus = (lastActiveTimestamp) => {
-    if (!lastActiveTimestamp) return { text: "ออฟไลน์", isOnline: false };
-    const diffSec = Math.floor((Date.now() - lastActiveTimestamp) / 1000);
-    if (diffSec < 25) {
-      return { text: "🟢 กำลังใช้งานอยู่", isOnline: true };
-    } else {
-      const dateObj = new Date(lastActiveTimestamp);
-      const timeStr = dateObj.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-      const dateStr = dateObj.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
-      return { text: `⚪ ใช้งานล่าสุดเมื่อ ${dateStr} เวลา ${timeStr}`, isOnline: false };
-    }
-  };
-
-  // ดึงข้อมูลคลาวด์และห้องแชท
+  // ดึงข้อมูลคลาวด์และห้องแชท พร้อมระบบเช็คประกาศแบบเด้งครั้งเดียว
   useEffect(() => {
     const fetchCloudData = async () => {
       try {
@@ -390,17 +376,16 @@ function App() {
           if (reportData) setReports(Object.values(reportData).reverse());
         }
 
+        // เช็คประกาศสำคัญจากแอดมิน (แสดงเฉพาะคนที่ยังไม่เคยปิดประกาศนี้ และแสดงครั้งเดียว)
         const annRes = await fetch(`${firebaseConfig.databaseURL}/announcement.json`);
         const annData = await annRes.json();
         if (annData && annData.text) {
-          setActiveAnnouncement((prev) => {
-            if (!prev || prev.id !== annData.id) {
-              setCanCloseAnnouncement(false);
-              setTimeout(() => setCanCloseAnnouncement(true), 3000);
-              return annData;
-            }
-            return prev;
-          });
+          const closedId = localStorage.getItem("bp_closedAnnouncementId");
+          if (closedId !== String(annData.id)) {
+            setActiveAnnouncement((prev) => (!prev || prev.id !== annData.id ? annData : prev));
+          } else {
+            setActiveAnnouncement(null);
+          }
         } else {
           setActiveAnnouncement(null);
         }
@@ -453,51 +438,21 @@ function App() {
       setChatMessages((prev) => [...prev, userMsg]);
       setChatInput("");
 
-      // วิเคราะห์เจตนาเชิงลึก (Intent & Semantic Analysis)
       const lower = userText.toLowerCase();
       let botReplyText = "";
 
-      // หมวด 1: ปัญหาหน้าจอเลื่อนไม่ได้ / บั๊ก / ใช้งานไม่ได้
       if (lower.includes("เลื่อน") || lower.includes("ขยับ") || lower.includes("พัง") || lower.includes("บั๊ก") || lower.includes(" error ") || lower.includes("ใช้ไม่ได้") || lower.includes("ค้าง")) {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
-          "คุณกำลังสอบถามเกี่ยวกับ **ปัญหาการใช้งาน / หน้าจอเลื่อนไม่ได้ใช่ไหมครับ?**\n\n" +
-          "💡 **วิธีแก้ไขเบื้องต้น:**\n" +
-          "อาการนี้เกิดจากหน้าต่างป๊อปอัปค้างการล็อกหน้าจอ แนะนำให้กดปิดปุ่มหรือรีเฟรชหน้าเว็บ 1 ครั้ง ระบบจะกลับมาเลื่อนได้ปกติครับ หรือกดแจ้งปัญหาในเมนู 3 ขีดได้เลยครับ!";
-      } 
-      // หมวด 2: วิธีใส่รูป / รูปโปรไฟล์ / อัปโหลดสลิป
-      else if (lower.includes("รูป") || lower.includes("สลิป") || lower.includes("ภาพ") || lower.includes("โปรไฟล์") || lower.includes("อัปโหลด")) {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
-          "คุณกำลังต้องการสอบถามเกี่ยวกับ **การใส่รูปภาพหรืออัปโหลดสลิปโอนเงินใช่ไหมครับ?**\n\n" +
-          "💡 **คำตอบ:**\n" +
-          "• การเปลี่ยนรูปโปรไฟล์: กดที่วงกลมรูปโปรไฟล์ด้านซ้ายบนเพื่อเลือกรูปภาพจากเครื่อง\n" +
-          "• การสแกนสลิป: ไปที่กล่องประมวลผลสลิปหน้าแรก เลือกรูปสลิปทีละ 1 รูป ระบบจะดึงยอดเงินและวันที่ให้อัตโนมัติครับ!";
-      } 
-      // หมวด 3: วิธีใช้งานแอป / เริ่มต้นยังไง / คู่มือ
-      else if (lower.includes("วิธี") || lower.includes("ยังไง") || lower.includes("ใช้") || lower.includes("เริ่มต้น") || lower.includes("คู่มือ") || lower.includes("app")) {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
-          "คุณกำลังต้องการทราบ **วิธีการใช้งานแอปพลิเคชันใช่ไหมครับ?**\n\n" +
-          "💡 **สรุปวิธีใช้งานหลัก:**\n" +
-          "1. บันทึกรายรับ-รายจ่าย: กดปุ่ม '+' เพิ่มข้อมูลหน้าหลัก\n" +
-          "2. ตั้งเป้าหมายออมเงิน: สร้างเป้าหมายและกดเติมเงินออมได้ตลอดเวลา\n" +
-          "3. วางแผนการเงิน: เปิดเมนู 3 ขีด ☰ แล้วเลือก 'วางแผนการเงิน' เพื่อจัดสรรงบเป็นเซ็ตครับ";
-      } 
-      // หมวด 4: คำทักทายทั่วไป
-      else if (lower.includes("สวัสดี") || lower.includes("hi") || lower.includes("hello") || lower.includes("หวัดดี")) {
-        botReplyText = `🤖 AI วิเคราะห์คำถาม:\nสวัสดีครับคุณ ${userName || "ผู้ใช้"}! มีเรื่องไหนให้ AI ช่วยวิเคราะห์หรือสอบถามแอดมิน พิมพ์บอกได้เลยครับ ยินดีให้บริการ 24 ชม.!`;
-      } 
-      // หมวด 5: กรณีไม่แน่ใจความหมาย -> ถามย้ำเพื่อให้ผู้ใช้ขยายความ แล้วค่อยให้คำตอบ
-      else {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
-          `อืมน้า... จากข้อความที่คุณพิมพ์มาว่า "${userText}" AI ยังไม่แน่ใจว่าคุณหมายถึงเรื่องอะไรเป็นพิเศษ\n\n` +
-          "❓ **คุณต้องการสอบถามเกี่ยวกับเรื่องใดด้านล่างนี้หรือเปล่าครับ?**\n" +
-          "1. วิธีใช้งานแอปพลิเคชัน / เริ่มต้นใช้งาน\n" +
-          "2. วิธีการใส่รูปภาพ / สแกนสลิปโอนเงิน\n" +
-          "3. ปัญหาการใช้งาน / หน้าจอเลื่อนไม่ได้\n" +
-          "4. การวางแผนการเงิน / เป้าหมายออมเงิน\n\n" +
-          "พิมพ์ระบุหัวข้อหรือพิมพ์อธิบายเพิ่มเติมได้เลยครับ AI พร้อมตอบคำตอบให้ทันที!";
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\nคุณกำลังสอบถามเกี่ยวกับ **ปัญหาการใช้งาน / หน้าจอเลื่อนไม่ได้ใช่ไหมครับ?**\n\n💡 **วิธีแก้ไขเบื้องต้น:**\nอาการนี้เกิดจากหน้าต่างป๊อปอัปค้างการล็อกหน้าจอ แนะนำให้รีเฟรชหน้าเว็บ 1 ครั้ง ระบบจะกลับมาปกติครับ";
+      } else if (lower.includes("รูป") || lower.includes("สลิป") || lower.includes("ภาพ") || lower.includes("โปรไฟล์") || lower.includes("อัปโหลด")) {
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\nคุณกำลังต้องการสอบถามเกี่ยวกับ **การใส่รูปภาพหรืออัปโหลดสลิปโอนเงินใช่ไหมครับ?**\n\n💡 **คำตอบ:** กดที่วงกลมรูปโปรไฟล์มุมซ้ายบนเพื่อเปลี่ยนรูป หรือใช้กล่องสแกนสลิปหน้าแรกเพื่อดึงยอดเงินอัตโนมัติครับ";
+      } else if (lower.includes("วิธี") || lower.includes("ยังไง") || lower.includes("ใช้") || lower.includes("เริ่มต้น") || lower.includes("คู่มือ")) {
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\nคุณกำลังต้องการทราบ **วิธีการใช้งานแอปพลิเคชันใช่ไหมครับ?**\n\n💡 1. บันทึกรายรับ-รายจ่ายกดปุ่ม '+' หน้าแรก\n2. ตั้งเป้าหมายออมเงินได้ตลอดเวลา\n3. จัดสรรงบการเงินผ่านเมนู 3 ขีด ☰";
+      } else if (lower.includes("สวัสดี") || lower.includes("hi") || lower.includes("hello")) {
+        botReplyText = `🤖 AI วิเคราะห์คำถาม:\nสวัสดีครับคุณ ${userName || "ผู้ใช้"}! มีเรื่องไหนให้ AI ช่วยวิเคราะห์หรือสอบถามเพิ่มเติม พิมพ์บอกได้เลยครับ ยินดีให้บริการ!`;
+      } else {
+        botReplyText = `🤖 AI วิเคราะห์คำถาม:\nจากข้อความ "${userText}" AI ยังไม่แน่ใจว่าคุณหมายถึงเรื่องใด:\n1. วิธีใช้งานแอป\n2. วิธีสแกนสลิป\n3. ปัญหาหน้าจอ\n4. วางแผนการเงิน\n\nพิมพ์ระบุหัวข้อได้เลยครับ AI พร้อมตอบคำตอบให้ทันที!`;
       }
 
-      // ส่งข้อความตอบกลับจากบอท AI
       setTimeout(async () => {
         const botMsgId = (Date.now() + 1).toString();
         const botMsg = {
@@ -507,7 +462,6 @@ function App() {
           text: botReplyText,
           time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
         };
-
         await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}/${botMsgId}.json`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -515,10 +469,8 @@ function App() {
         });
         setChatMessages((prev) => [...prev, botMsg]);
       }, 1000);
-
     } catch (err) {
       console.error(err);
-      alert("ไม่สามารถส่งข้อความได้");
     }
   };
 
@@ -526,7 +478,7 @@ function App() {
     e.preventDefault();
     if (!adminChatInput.trim() || !adminSelectedUserChat) return;
     const msgId = Date.now().toString();
-    const newMsg = {
+    const adminMsg = {
       id: msgId,
       sender: "admin",
       senderName: "ผู้ดูแลระบบ (Admin)",
@@ -538,7 +490,7 @@ function App() {
       await fetch(`${firebaseConfig.databaseURL}/chats/${adminSelectedUserChat.id}/${msgId}.json`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newMsg),
+        body: JSON.stringify(adminMsg),
       });
       setAdminChatInput("");
     } catch (err) {
@@ -546,91 +498,138 @@ function App() {
     }
   };
 
-  const handleSendAnnouncement = async (e) => {
+  const handleAddTransaction = (e) => {
     e.preventDefault();
-    if (!announcementText.trim()) return;
-    const annPayload = {
-      id: Date.now().toString(),
-      text: announcementText.trim(),
-      time: new Date().toLocaleString("th-TH"),
+    const num = parseFloat(amount);
+    if (!num || num <= 0) return;
+
+    let finalCategory = category;
+    if (category === "other" && customCategoryNote.trim()) {
+      finalCategory = customCategoryNote.trim();
+    }
+
+    const newTx = {
+      id: Date.now(),
+      type,
+      account,
+      amount: num,
+      category: finalCategory,
+      date: date || todayStr(),
+      time: time || new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+      note: note.trim(),
     };
+
+    setTransactions([newTx, ...transactions]);
+    setAmount("");
+    setNote("");
+    setCustomCategoryNote("");
+    setTime("");
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setScanning(true);
+    setScanMessage("กำลังย่อและอัปโหลดรูปสลิป...");
+
     try {
-      await fetch(`${firebaseConfig.databaseURL}/announcement.json`, {
-        method: "PUT",
+      const { base64Data, mediaType } = await resizeImage(file, 1024);
+      setScanMessage("🤖 AI กำลังอ่านข้อมูลจากสลิป...");
+
+      const res = await fetch(`${API_BASE_URL}/api/parse-slip`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(annPayload),
+        body: JSON.stringify({ base64Data, mediaType }),
       });
-      setAnnouncementText("");
-      alert("ส่งประกาศแจ้งเตือนไปยังหน้าจอผู้ใช้ทุกคนเรียบร้อยแล้ว!");
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-  const handleClearAnnouncement = async () => {
-    if (!confirm("ต้องการลบประกาศนี้ออกจากหน้าจอผู้ใช้ทั้งหมดใช่หรือไม่?")) return;
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/announcement.json`, {
-        method: "DELETE",
+      const parsed = await res.json();
+      if (!res.ok) throw new Error(parsed.error || "Failed to parse slip");
+
+      setPendingSlip({
+        amount: parsed.amount ? String(parsed.amount) : "",
+        date: parsed.date || todayStr(),
+        time: parsed.time || "",
+        note: parsed.note || "",
+        receiverName: parsed.receiverName || "",
       });
-      setActiveAnnouncement(null);
-      alert("ลบประกาศเรียบร้อยแล้ว");
+      setSlipCategory("food");
+      setSlipCustomNote("");
+      setSlipTime(parsed.time || "");
     } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleDeleteUser = async (targetDeviceId) => {
-    if (!confirm("คุณต้องการลบข้อมูลผู้ใช้งานคนนี้ออกจากระบบหลังบ้านใช่หรือไม่?")) return;
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/users/${targetDeviceId}.json`, {
-        method: "DELETE",
+      console.error("Slip parse error:", err);
+      alert("ไม่สามารถอ่านสลิปได้อัตโนมัติ กรุณากรอกข้อมูลเองครับ");
+      setPendingSlip({
+        amount: "",
+        date: todayStr(),
+        time: "",
+        note: "",
+        receiverName: "",
       });
-      setOnlineUsers((prev) => prev.filter((u) => u.id !== targetDeviceId));
-      alert("ลบผู้ใช้งานเรียบร้อยแล้ว");
-    } catch (err) {
-      console.error(err);
+    } finally {
+      setScanning(false);
+      setScanMessage("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const handleResetMyAccount = async () => {
-    if (!confirm("⚠️ คำเตือน: คุณต้องการลบข้อมูลทั้งหมดและเริ่มใช้งานใหม่ใช่หรือไม่?")) return;
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/users/${deviceId}.json`, {
-        method: "DELETE",
-      });
-    } catch (err) {
-      console.error(err);
+  const confirmPendingSlip = () => {
+    if (!pendingSlip) return;
+    const num = parseFloat(pendingSlip.amount);
+    if (!num || num <= 0) {
+      alert("กรุณาระบุจำนวนเงินให้ถูกต้อง");
+      return;
     }
-    localStorage.clear();
-    window.location.reload();
+
+    let finalCat = slipCategory;
+    if (slipCategory === "other" && slipCustomNote.trim()) {
+      finalCat = slipCustomNote.trim();
+    }
+
+    const newTx = {
+      id: Date.now(),
+      type: "expense",
+      account: "bank",
+      amount: num,
+      category: finalCat,
+      date: pendingSlip.date || todayStr(),
+      time: slipTime || pendingSlip.time || new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+      note: pendingSlip.note ? `โอนให้: ${pendingSlip.receiverName} (${pendingSlip.note})` : `โอนให้: ${pendingSlip.receiverName || "ไม่ระบุ"}`,
+    };
+
+    setTransactions([newTx, ...transactions]);
+    setPendingSlip(null);
   };
 
-  const confirmDelete = () => {
-    if (!itemToDelete) return;
-    if (itemToDelete.type === "transaction") {
-      setTransactions((prev) => prev.filter((t) => t.id !== itemToDelete.id));
-    } else if (itemToDelete.type === "debt") {
-      setDebts((prev) => prev.filter((d) => d.id !== itemToDelete.id));
-    } else if (itemToDelete.type === "goal") {
-      setSavingsGoals((prev) => prev.filter((g) => g.id !== itemToDelete.id));
-    } else if (itemToDelete.type === "budgetSet") {
-      const remaining = budgetSets.filter((s) => s.id !== itemToDelete.id);
-      setBudgetSets(remaining);
-      if (activeBudgetSetId === itemToDelete.id && remaining.length > 0) {
-        setActiveBudgetSetId(remaining[0].id);
-      } else if (remaining.length === 0) {
-        setActiveBudgetSetId("");
-      }
-    }
-    setItemToDelete(null);
-  };
-
-  const handleDepositGoal = (e) => {
+  const handleAddGoal = (e) => {
     e.preventDefault();
-    if (!goalToDeposit || !depositAmount || Number(depositAmount) <= 0) return;
-    setSavingsGoals((prev) =>
-      prev.map((g) => (g.id === goalToDeposit.id ? { ...g, current: (g.current || 0) + Number(depositAmount) } : g))
+    const targetNum = parseFloat(goalTarget);
+    const currentNum = parseFloat(goalCurrent) || 0;
+    if (!goalName.trim() || !targetNum || targetNum <= 0) {
+      alert("กรุณากรอกชื่อและเป้าหมายให้ถูกต้อง");
+      return;
+    }
+
+    const newGoal = {
+      id: Date.now(),
+      name: goalName.trim(),
+      target: targetNum,
+      current: currentNum,
+    };
+
+    setSavingsGoals([...savingsGoals, newGoal]);
+    setGoalName("");
+    setGoalTarget("");
+    setGoalCurrent("");
+    setActiveModal(null);
+  };
+
+  const handleDepositGoal = () => {
+    const num = parseFloat(depositAmount);
+    if (!num || num <= 0 || !goalToDeposit) return;
+
+    setSavingsGoals(
+      savingsGoals.map((g) => (g.id === goalToDeposit.id ? { ...g, current: g.current + num } : g))
     );
     setGoalToDeposit(null);
     setDepositAmount("");
@@ -638,577 +637,620 @@ function App() {
 
   const handleUpdateGoal = (e) => {
     e.preventDefault();
-    if (!goalToEdit || !editGoalName || !editGoalTarget || Number(editGoalTarget) <= 0) return;
-    setSavingsGoals((prev) =>
-      prev.map((g) =>
+    if (!goalToEdit) return;
+    const targetNum = parseFloat(editGoalTarget);
+    const currentNum = parseFloat(editGoalCurrent) || 0;
+    if (!editGoalName.trim() || !targetNum || targetNum <= 0) return;
+
+    setSavingsGoals(
+      savingsGoals.map((g) =>
         g.id === goalToEdit.id
-          ? { ...g, name: editGoalName.trim(), target: Number(editGoalTarget), current: Number(editGoalCurrent) || 0 }
+          ? { ...g, name: editGoalName.trim(), target: targetNum, current: currentNum }
           : g
       )
     );
     setGoalToEdit(null);
-    setEditGoalName("");
-    setEditGoalTarget("");
-    setEditGoalCurrent("");
   };
 
-  const handleSaveNewBudgetSet = (e) => {
+  const handleAddDebt = (e) => {
     e.preventDefault();
-    if (!newSetName || !newSetTotal || Number(newSetTotal) <= 0) return;
-    const newId = Date.now().toString();
-    const newSet = {
-      id: newId,
-      name: newSetName.trim(),
-      totalBudget: Number(newSetTotal),
-      items: { ...setAllocations },
-      customLabels: { ...setCustomLabels },
+    const num = parseFloat(debtAmount);
+    if (!debtPerson.trim() || !num || num <= 0) {
+      alert("กรุณากรอกชื่อและจำนวนเงินให้ถูกต้อง");
+      return;
+    }
+
+    const newDebt = {
+      id: Date.now(),
+      type: debtType,
+      person: debtPerson.trim(),
+      amount: num,
+      note: debtNote.trim(),
+      dueDate: debtDueDate || "",
     };
-    setBudgetSets((prev) => [...prev, newSet]);
-    setActiveBudgetSetId(newId);
-    setNewSetName("");
-    setNewSetTotal("");
-    setSetAllocations({});
-    setSetCustomLabels({});
-    alert("บันทึกเซ็ตแผนการเงินเรียบร้อยแล้ว!");
-  };
 
-  const acceptPrivacy = () => {
-    localStorage.setItem("bp_privacyAccepted", "true");
-    setShowPrivacyNotice(false);
-  };
-
-  const handleAvatarChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setUserAvatar(ev.target.result);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleAdminLogin = (e) => {
-    e.preventDefault();
-    if (adminUsername.trim() === "Admin" && adminPassword.trim() === "27112547") {
-      setIsAdminLoggedIn(true);
-      setShowAdminLogin(false);
-      setAdminLoginError("");
-      setAdminUsername("");
-      setAdminPassword("");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      setAdminLoginError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
-    }
+    setDebts([...debts, newDebt]);
+    setDebtPerson("");
+    setDebtAmount("");
+    setDebtNote("");
+    setDebtDueDate("");
+    setActiveModal(null);
   };
 
   const handleSendReport = async (e) => {
     e.preventDefault();
     if (!reportText.trim()) return;
-    const reportPayload = {
-      id: Date.now().toString(),
+
+    const reportObj = {
+      id: Date.now(),
+      deviceId,
       userName: userName || "ผู้ใช้ทั่วไป",
       text: reportText.trim(),
-      date: new Date().toLocaleString("th-TH"),
+      time: new Date().toLocaleString("th-TH"),
     };
+
     try {
-      await fetch(`${firebaseConfig.databaseURL}/reports/${reportPayload.id}.json`, {
+      await fetch(`${firebaseConfig.databaseURL}/reports/${reportObj.id}.json`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reportPayload),
+        body: JSON.stringify(reportObj),
       });
+      alert("ส่งเรื่องแจ้งปัญหา/ข้อเสนอแนะเรียบร้อยแล้ว ขอบคุณครับ!");
       setReportText("");
       setShowReportModal(false);
-      alert("ส่งรายงานปัญหาถึงผู้ดูแลระบบเรียบร้อยแล้ว");
     } catch (err) {
       console.error(err);
+      alert("ไม่สามารถส่งข้อมูลได้");
     }
   };
 
-  const handleSingleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleSendAnnouncement = async (e) => {
+    e.preventDefault();
+    if (!announcementText.trim()) return;
 
-    setScanning(true);
-    setScanMessage("กำลังอ่านข้อมูลสลิป...");
+    const annObj = {
+      id: Date.now(),
+      text: announcementText.trim(),
+      time: new Date().toLocaleString("th-TH"),
+    };
 
     try {
-      const { base64Data, mediaType } = await resizeImage(file);
-      const res = await fetch(`${API_BASE_URL}/api/parse-slip`, {
-        method: "POST",
+      await fetch(`${firebaseConfig.databaseURL}/announcement.json`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64Data, mediaType }),
+        body: JSON.stringify(annObj),
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.amount && Number(data.amount) > 0) {
-          setPendingSlip({
-            amount: Number(data.amount),
-            date: data.date || todayStr(),
-            time: data.time || "",
-            note: data.note || "",
-          });
-          setSlipCategory("food");
-          setSlipCustomNote("");
-          setSlipTime(data.time || "");
-          setScanMessage("");
-        } else {
-          setScanMessage("อ่านสลิปสำเร็จ แต่ไม่พบยอดเงิน");
-        }
-      } else {
-        setScanMessage("ไม่สามารถประมวลผลสลิปนี้ได้");
-      }
+      alert("ประกาศข้อความไปยังผู้ใช้ทุกคนเรียบร้อยแล้ว!");
+      setAnnouncementText("");
     } catch (err) {
       console.error(err);
-      setScanMessage("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-    } finally {
-      setScanning(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      alert("ไม่สามารถส่งประกาศได้");
     }
   };
 
-  const handleConfirmSlip = (e) => {
+  const handleAdminLogin = (e) => {
     e.preventDefault();
-    if (!pendingSlip) return;
-
-    const newTx = {
-      id: Date.now().toString(),
-      type: "expense",
-      account: "bank",
-      amount: pendingSlip.amount,
-      category: slipCategory,
-      customCategoryNote: slipCategory === "other_exp" ? slipCustomNote.trim() : "",
-      date: pendingSlip.date,
-      time: slipTime.trim(),
-      note: pendingSlip.note || "นำเข้าจากสลิป",
-    };
-
-    setTransactions((prev) => [newTx, ...prev]);
-    setPendingSlip(null);
-    setScanMessage(`บันทึกรายจ่าย ${formatMoney(pendingSlip.amount)} บาท เรียบร้อยแล้ว`);
+    if (adminUsername === "admin" && adminPassword === "1234") {
+      setIsAdminLoggedIn(true);
+      setShowAdminLogin(false);
+      setAdminUsername("");
+      setAdminPassword("");
+      setAdminLoginError("");
+    } else {
+      setAdminLoginError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+    }
   };
 
-  const handleAddTransaction = (e) => {
-    e.preventDefault();
-    if (!amount || Number(amount) <= 0) return;
-    const newTx = {
-      id: Date.now().toString(),
-      type,
-      account,
-      amount: Number(amount),
-      category,
-      customCategoryNote: category === "other_exp" ? customCategoryNote.trim() : "",
-      date,
-      time: time.trim(),
-      note,
-    };
-    setTransactions((prev) => [newTx, ...prev]);
-    setAmount("");
-    setNote("");
-    setCustomCategoryNote("");
-    setTime("");
-    setActiveModal(null);
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    const { type: itemType, id } = itemToDelete;
+
+    if (itemType === "transaction") {
+      setTransactions(transactions.filter((t) => t.id !== id));
+    } else if (itemType === "goal") {
+      setSavingsGoals(savingsGoals.filter((g) => g.id !== id));
+    } else if (itemType === "debt") {
+      setDebts(debts.filter((d) => d.id !== id));
+    } else if (itemType === "budgetSet") {
+      setBudgetSets(budgetSets.filter((s) => s.id !== id));
+      if (activeBudgetSetId === id) setActiveBudgetSetId("");
+    }
+
+    setItemToDelete(null);
   };
-
-  const handleAddGoal = (e) => {
-    e.preventDefault();
-    if (!goalName || !goalTarget || Number(goalTarget) <= 0) return;
-    setSavingsGoals((prev) => [
-      ...prev,
-      { id: Date.now().toString(), name: goalName, target: Number(goalTarget), current: Number(goalCurrent) || 0 },
-    ]);
-    setGoalName("");
-    setGoalTarget("");
-    setGoalCurrent("");
-    setActiveModal(null);
-  };
-
-  const handleAddDebt = (e) => {
-    e.preventDefault();
-    if (!debtAmount || Number(debtAmount) <= 0) return;
-    setDebts((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        type: debtType,
-        note: debtNote,
-        amount: Number(debtAmount),
-        person: debtPerson,
-        dueDate: debtDueDate,
-      },
-    ]);
-    setDebtNote("");
-    setDebtAmount("");
-    setDebtPerson("");
-    setDebtDueDate("");
-    setActiveModal(null);
-  };
-
-  const handleAdjustBank = () => {
-    if (!bankRealInput) return;
-    const realVal = Number(bankRealInput);
-    const calculatedBank = transactions.reduce(
-      (acc, t) => (t.account === "bank" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    );
-    setAccountAdjustments((prev) => ({ ...prev, bank: realVal - calculatedBank }));
-    setBankRealInput("");
-  };
-
-  const handleAdjustCash = () => {
-    if (!cashRealInput) return;
-    const realVal = Number(cashRealInput);
-    const calculatedCash = transactions.reduce(
-      (acc, t) => (t.account === "cash" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    );
-    setAccountAdjustments((prev) => ({ ...prev, cash: realVal - calculatedCash }));
-    setCashRealInput("");
-  };
-
-  const activeBudgetSet = budgetSets.find((s) => s.id === activeBudgetSetId) || budgetSets[0];
-  const totalAllocated = activeBudgetSet ? Object.values(activeBudgetSet.items).reduce((a, b) => a + Number(b), 0) : 0;
-  const remainingBudget = activeBudgetSet ? activeBudgetSet.totalBudget - totalAllocated : 0;
-
-  const newSetTotalAllocated = Object.values(setAllocations).reduce((a, b) => a + Number(b), 0);
-  const newSetRemaining = (Number(newSetTotal) || 0) - newSetTotalAllocated;
 
   return (
-    <div className="min-h-screen bg-[#F7F5EF] text-[#2C2C2C] font-sans pb-12 relative">
-
-      {/* 🚨 แจ้งเตือนประกาศจาก Admin */}
-      {activeAnnouncement && (
-        <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center border-2 border-amber-500">
-            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              📢
-            </div>
-            <h3 className="text-base font-extrabold text-gray-900">ประกาศสำคัญจากผู้ดูแลระบบ</h3>
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-gray-800 font-medium whitespace-pre-wrap leading-relaxed text-left">
-              {activeAnnouncement.text}
-            </div>
-            <p className="text-[10px] text-gray-400">ส่งเมื่อ: {activeAnnouncement.time}</p>
-
-            {canCloseAnnouncement ? (
-              <button
-                onClick={() => setActiveAnnouncement(null)}
-                className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold shadow-md hover:bg-black transition flex items-center justify-center gap-2"
-              >
-                <span>✕ ปิดประกาศนี้</span>
-              </button>
-            ) : (
-              <div className="w-full bg-gray-200 text-gray-500 py-3 rounded-2xl text-xs font-bold cursor-not-allowed">
-                ⏳ กรุณารอสักครู่ (สามารถปิดได้ใน 3 วินาที)...
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 🚀 ONBOARDING WIZARD */}
-      {onboardingStep === 1 && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
+    <div className="bg-[#F3F2ED] min-h-screen text-[#1B211E] font-sans pb-28 selection:bg-[#2F6F5E] selection:text-white">
+      {/* 🚀 Onboarding Wizard สำหรับผู้ใช้ใหม่ */}
+      {onboardingStep && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl border border-[#E4E1D6]">
+            <div className="w-16 h-16 bg-[#2F6F5E]/10 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
               👋
             </div>
-            <h3 className="text-lg font-extrabold text-gray-900">ยินดีต้อนรับสู่แอปงบประมาณ!</h3>
-            <p className="text-xs text-gray-500">กรุณาใส่ชื่อของคุณเพื่อเริ่มต้นใช้งานระบบ</p>
+            <h2 className="text-xl font-bold mb-2">ยินดีต้อนรับสู่ Budget Planner</h2>
+            <p className="text-sm text-[#63695F] mb-6">
+              แอปพลิเคชันจดบันทึกรายรับ-รายจ่าย สแกนสลิปอัจฉริยะ และวางแผนการเงินส่วนตัว
+            </p>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (inputName.trim()) {
-                  setUserName(inputName.trim());
-                  setOnboardingStep(2);
-                }
+                if (!inputName.trim()) return;
+                setUserName(inputName.trim());
+                setOnboardingStep(null);
+                setTutorialStep(1);
               }}
-              className="space-y-3 pt-2"
+              className="space-y-4 text-left"
             >
-              <input
-                type="text"
-                placeholder="ชื่อของคุณ (เช่น Gun)"
-                value={inputName}
-                onChange={(e) => setInputName(e.target.value)}
-                className="w-full px-4 py-3 border rounded-2xl text-sm bg-gray-50 font-semibold text-center"
-                required
-              />
-              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold shadow-md">
-                ถัดไป ➔
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">ชื่อเล่นของคุณ</label>
+                <input
+                  type="text"
+                  placeholder="เช่น คุณการ์ฟิลด์"
+                  value={inputName}
+                  onChange={(e) => setInputName(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] focus:outline-none focus:border-[#2F6F5E] text-sm"
+                  required
+                  autoFocus
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-[#1B211E] text-white py-3 rounded-xl font-bold text-sm shadow-md hover:bg-black transition"
+              >
+                เริ่มใช้งานกันเลย 🚀
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {onboardingStep === 2 && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              📷
+      {/* 📢 หน้าต่างประกาศสำคัญจากแอดมิน (เด้งครั้งเดียวสำหรับผู้ใช้งานใหม่/ตอนประกาศ) */}
+      {activeAnnouncement && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl border border-[#E4E1D6]">
+            <div className="text-3xl mb-2">📢</div>
+            <h3 className="text-lg font-bold mb-2 text-[#1B211E]">ประกาศสำคัญจากผู้ดูแลระบบ</h3>
+            <div className="bg-[#F3F2ED] p-3 rounded-xl text-sm text-[#333] mb-5 text-left whitespace-pre-wrap max-h-48 overflow-y-auto">
+              {activeAnnouncement.text}
             </div>
-            <h3 className="text-lg font-extrabold text-gray-900">ตั้งค่ารูปโปรไฟล์</h3>
-            <p className="text-xs text-gray-500">คุณสามารถอัปโหลดรูปภาพโปรไฟล์ของคุณได้ (หรือจะข้ามไปก่อนก็ได้)</p>
-            
-            <div className="py-2 flex justify-center">
-              <div
-                onClick={() => avatarInputRef.current?.click()}
-                className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 cursor-pointer overflow-hidden border-2 border-dashed border-gray-300 mx-auto shadow-inner"
-              >
-                {userAvatar ? <img src={userAvatar} className="w-full h-full object-cover" /> : <span className="text-2xl">➕</span>}
-                <input type="file" ref={avatarInputRef} accept="image/*" className="hidden" onChange={handleAvatarChange} />
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => setOnboardingStep(3)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">
-                ข้ามขั้นตอนนี้
-              </button>
-              <button onClick={() => setOnboardingStep(3)} className="flex-1 py-3 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold">
-                ถัดไป ➔
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                localStorage.setItem("bp_closedAnnouncementId", String(activeAnnouncement.id));
+                setActiveAnnouncement(null);
+              }}
+              className="w-full bg-[#1B211E] text-white py-3 rounded-xl font-bold text-sm hover:bg-black transition cursor-pointer"
+            >
+              ✕ ปิดประกาศนี้
+            </button>
           </div>
         </div>
       )}
 
-      {onboardingStep === 3 && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              💡
-            </div>
-            <h3 className="text-lg font-extrabold text-gray-900">ต้องการแนะนำวิธีใช้งานไหม?</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              เรามีระบบทัวร์แนะนำ 6 ขั้นตอนครอบคลุมทุกฟังก์ชัน เพื่อให้คุณใช้งานได้คล่องทันที คุณต้องการรับชมไหมครับ?
-            </p>
-            <div className="space-y-2 pt-2">
-              <button
-                onClick={() => { setOnboardingStep(null); setTutorialStep(1); }}
-                className="w-full py-3 bg-[#1B5E20] text-white rounded-2xl text-xs font-bold shadow-md"
-              >
-                ✨ เริ่มทัวร์แนะนำการใช้งาน (6 ขั้นตอน)
-              </button>
-              <button onClick={() => setOnboardingStep(null)} className="w-full py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">
-                ข้ามไปหน้าหลักเลย
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🗺️ ระบบสอนใช้งานแบบทัวร์ 6 ขั้นตอน */}
+      {/* 🧭 Tutorial Tour แนะนำฟังก์ชัน */}
       {tutorialStep > 0 && (
-        <div className="fixed inset-0 bg-black/80 z-[250] flex flex-col items-center justify-center p-6 text-center text-white">
-          <div className="max-w-sm w-full space-y-4 bg-[#1E1E1E] p-6 rounded-3xl border border-gray-700 shadow-2xl text-left">
-            <div className="flex justify-between items-center text-xs text-gray-400 font-bold border-b border-gray-800 pb-2">
-              <span>คู่มือการใช้งานระบบ</span>
-              <span className="text-emerald-400">ขั้นตอนที่ {tutorialStep} จาก 6</span>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl border border-[#E4E1D6]">
+            <div className="text-3xl mb-2">
+              {tutorialStep === 1 ? "📸" : tutorialStep === 2 ? "💰" : "🎯"}
             </div>
-
-            {tutorialStep === 1 && (
-              <div className="space-y-2">
-                <div className="text-2xl">👋</div>
-                <h4 className="text-sm font-bold text-emerald-400">1. ยินดีต้อนรับสู่แอปจัดการการเงิน</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">แอปนี้ออกแบบมาให้คุณจัดการเงิน เก็บออม และตรวจสอบสถานะทางการเงินได้อย่างรวดเร็วในหน้าจอเดียว!</p>
-              </div>
-            )}
-            {tutorialStep === 2 && (
-              <div className="space-y-2">
-                <div className="text-2xl">📊</div>
-                <h4 className="text-sm font-bold text-emerald-400">2. ยอดเงินคงเหลือและกราฟวงกลม</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">การ์ดสีดำด้านซ้ายจะสรุปยอดเงินทั้งหมดของคุณ และมีกราฟวงกลมแสดงสัดส่วนรายจ่ายให้เห็นชัดเจน</p>
-              </div>
-            )}
-            {tutorialStep === 3 && (
-              <div className="space-y-2">
-                <div className="text-2xl">📸</div>
-                <h4 className="text-sm font-bold text-emerald-400">3. สแกนสลิปอัจฉริยะ</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">ไม่ต้องพิมพ์เอง! แค่เลือกรูปสลิปโอนเงิน ระบบจะดึงยอดเงินและวันที่ให้อัตโนมัติ พร้อมให้คุณเลือกหมวดหมู่</p>
-              </div>
-            )}
-            {tutorialStep === 4 && (
-              <div className="space-y-2">
-                <div className="text-2xl">➕</div>
-                <h4 className="text-sm font-bold text-emerald-400">4. บันทึกข้อมูล & เจ้าหนี้/ลูกหนี้</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">ใช้ปุ่มเพิ่มข้อมูลด้านล่างเพื่อจดรายรับ-รายจ่าย หรือบันทึกรายการเจ้าหนี้/ลูกหนี้</p>
-              </div>
-            )}
-            {tutorialStep === 5 && (
-              <div className="space-y-2">
-                <div className="text-2xl">🎯</div>
-                <h4 className="text-sm font-bold text-emerald-400">5. เป้าหมายการออม & วางแผนงบ</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">ตั้งเป้าหมายเก็บเงินและจัดสรรงบเป็นเซ็ตล่วงหน้า (เช่น Set 1, Set 2)</p>
-              </div>
-            )}
-            {tutorialStep === 6 && (
-              <div className="space-y-2">
-                <div className="text-2xl">☰</div>
-                <h4 className="text-sm font-bold text-emerald-400">6. เมนูเพิ่มเติม (3 ขีดซ้ายบน)</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">กดปุ่ม 3 ขีดเพื่อเปิดดูประวัติย้อนหลัง, แชทคุยกับแอดมินหรือบอท AI, หรือปรับยอดเงินสด/ธนาคาร</p>
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-3">
-              {tutorialStep > 1 && (
-                <button onClick={() => setTutorialStep((prev) => prev - 1)} className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold">
-                  ← ย้อนกลับ
-                </button>
-              )}
-              {tutorialStep < 6 ? (
-                <button onClick={() => setTutorialStep((prev) => prev + 1)} className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold">
-                  ถัดไป ➔
-                </button>
+            <h3 className="text-lg font-bold mb-2">
+              {tutorialStep === 1 && "สแกนสลิปอัจฉริยะ"}
+              {tutorialStep === 2 && "กระเป๋าเงิน & ยอดคงเหลือ"}
+              {tutorialStep === 3 && "เป้าหมายการออมเงิน"}
+            </h3>
+            <p className="text-sm text-[#63695F] mb-6">
+              {tutorialStep === 1 && "อัปโหลดรูปสลิปโอนเงิน ระบบ AI จะทำการดึงยอดเงินและวันที่ให้อัตโนมัติทันที!"}
+              {tutorialStep === 2 && "แยกบัญชีธนาคารและเงินสดชัดเจน คำนวณยอดเงินรวมให้อัตโนมัติแบบเรียลไทม์"}
+              {tutorialStep === 3 && "สร้างเป้าหมายเก็บเงินในฝัน พร้อมฟังก์ชันฝากและถอนเงินสะสมได้ตลอดเวลา"}
+            </p>
+            <div className="flex gap-2">
+              {tutorialStep < 3 ? (
+                <>
+                  <button
+                    onClick={() => setTutorialStep(0)}
+                    className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-xl font-bold text-xs"
+                  >
+                    ข้ามคำแนะนำ
+                  </button>
+                  <button
+                    onClick={() => setTutorialStep(tutorialStep + 1)}
+                    className="flex-1 bg-[#2F6F5E] text-white py-2.5 rounded-xl font-bold text-xs"
+                  >
+                    ถัดไป →
+                  </button>
+                </>
               ) : (
-                <button onClick={() => setTutorialStep(0)} className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold">
-                  🎉 จบการแนะนำ เริ่มใช้งานเลย
+                <button
+                  onClick={() => setTutorialStep(0)}
+                  className="w-full bg-[#2F6F5E] text-white py-3 rounded-xl font-bold text-sm shadow-md"
+                >
+                  พร้อมลุยเลย! 🎉
                 </button>
               )}
-            </div>
-            <div className="text-center pt-1">
-              <button onClick={() => setTutorialStep(0)} className="text-[11px] text-gray-400 hover:text-white underline">
-                ข้ามการแนะนำ
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ☰ Side Menu Drawer */}
-      {isMenuOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex">
-          <div className="w-4/5 max-w-sm bg-white h-full p-6 space-y-4 shadow-2xl overflow-y-auto flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center border-b pb-4">
-                <h2 className="text-lg font-bold text-[#1E1E1E]">เมนูและเครื่องมือ</h2>
-                <button onClick={() => setIsMenuOpen(false)} className="text-gray-400 text-xl font-bold">✕</button>
-              </div>
-
-              <div className="space-y-2 pt-2">
-                <button
-                  onClick={() => { setActiveModal("chat_admin"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-blue-50 hover:bg-blue-100 rounded-2xl text-xs font-bold text-blue-800 border border-blue-200"
-                >
-                  <span>💬 แชทซัพพอร์ต (พร้อม AI บอทอัจฉริยะ)</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("transactions"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-                >
-                  <span>📜 รายการประวัติทั้งหมด ({transactions.length})</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("budget_planner"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-emerald-50 hover:bg-emerald-100 rounded-2xl text-xs font-bold text-emerald-800 border border-emerald-200"
-                >
-                  <span>🗺️ วางแผนการเงิน / จัดสรรงบ (เซ็ต Set 1, 2...)</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("categories_detail"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-                >
-                  <span>📊 สรุปใช้จ่ายตามหมวดหมู่ (ละเอียดยิบ)</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("goals_detail"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-                >
-                  <span>🎯 เป้าหมายการออม (รายละเอียดทั้งหมด)</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("adjust"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-                >
-                  <span>⚖️ ปรับยอดให้ตรงกับบัญชีจริง</span>
-                  <span>➔</span>
-                </button>
-              </div>
-
-              <div className="pt-4 border-t space-y-2">
-                <button onClick={() => { setTutorialStep(1); setIsMenuOpen(false); }} className="w-full text-left text-xs text-emerald-600 hover:text-emerald-800 py-2 font-semibold">
-                  💡 เปิดดูคู่มือแนะนำการใช้งาน (6 ขั้นตอน)
-                </button>
-                <button onClick={() => { setShowPrivacyNotice(true); setIsMenuOpen(false); }} className="w-full text-left text-xs text-gray-600 hover:text-black py-2">
-                  📜 นโยบายการเก็บข้อมูล
-                </button>
-                <button onClick={() => { setShowReportModal(true); setIsMenuOpen(false); }} className="w-full text-left text-xs text-rose-600 hover:text-rose-800 py-2 font-semibold">
-                  🚨 แจ้งปัญหาการใช้งาน
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t shrink-0">
+      {/* 🔔 Modal ยืนยันการลบรายการ */}
+      {itemToDelete && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-xs w-full text-center shadow-2xl border border-[#E4E1D6]">
+            <div className="text-3xl mb-2">⚠️</div>
+            <h3 className="text-base font-bold mb-2">ยืนยันการลบข้อมูล</h3>
+            <p className="text-xs text-[#63695F] mb-5">คุณต้องการลบรายการนี้ใช่หรือไม่? ไม่สามารถกู้คืนได้</p>
+            <div className="flex gap-2">
               <button
-                onClick={handleResetMyAccount}
-                className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl text-xs font-bold border border-rose-200 transition flex items-center justify-center gap-2 shadow-sm"
+                onClick={() => setItemToDelete(null)}
+                className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-xl font-bold text-xs"
               >
-                <span>🗑️</span>
-                <span>รีเซ็ตบัญชีและลบข้อมูลทั้งหมด (เริ่มต้นใหม่)</span>
+                ยกเลิก
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 bg-red-600 text-white py-2.5 rounded-xl font-bold text-xs"
+              >
+                ลบข้อมูล
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 💬 Modal หน้าต่างแชท (AI วิเคราะห์เจตนาและถามย้ำ) */}
-      {activeModal === "chat_admin" && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl flex flex-col h-[80vh] overflow-hidden">
-            <div className="p-4 border-b flex justify-between items-center bg-[#1E1E1E] text-white shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold">
-                  🤖
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold">แชทซัพพอร์ต & AI บอทอัจฉริยะ</h3>
-                  <p className="text-[10px] text-blue-300">วิเคราะห์คำถามและให้คำตอบทันที 24 ชม.</p>
-                </div>
+      {/* ⚙️ Modal ปรับปรุงยอดเงินจริง */}
+      {activeModal === "adjustAccount" && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-[#E4E1D6]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-bold">🛠️ ปรับปรุงยอดเงินบัญชี</h3>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-[#63695F] mb-4">
+              หากยอดเงินในแอปไม่ตรงกับยอดในบัญชีจริง สามารถระบุส่วนต่างเพื่อปรับยอดให้ตรงกันได้ทันที
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">
+                  ยอดธนาคารจริง (ปัจจุบันในแอป: {formatMoney(calcBankTotal)})
+                </label>
+                <input
+                  type="number"
+                  placeholder="ระบุยอดเงินจริง"
+                  value={bankRealInput}
+                  onChange={(e) => setBankRealInput(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                />
+                <button
+                  onClick={() => {
+                    const real = parseFloat(bankRealInput);
+                    if (isNaN(real)) return;
+                    const currentWithoutAdj = calcBankTotal - accountAdjustments.bank;
+                    const diff = real - currentWithoutAdj;
+                    setAccountAdjustments({ ...accountAdjustments, bank: diff });
+                    setBankRealInput("");
+                    alert("ปรับยอดธนาคารสำเร็จ!");
+                  }}
+                  className="mt-2 w-full bg-[#2F6F5E] text-white py-2 rounded-xl text-xs font-bold"
+                >
+                  บันทึกยอดธนาคาร
+                </button>
               </div>
-              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold p-1">✕</button>
+
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">
+                  ยอดเงินสดจริง (ปัจจุบันในแอป: {formatMoney(calcCashTotal)})
+                </label>
+                <input
+                  type="number"
+                  placeholder="ระบุยอดเงินสดจริง"
+                  value={cashRealInput}
+                  onChange={(e) => setCashRealInput(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                />
+                <button
+                  onClick={() => {
+                    const real = parseFloat(cashRealInput);
+                    if (isNaN(real)) return;
+                    const currentWithoutAdj = calcCashTotal - accountAdjustments.cash;
+                    const diff = real - currentWithoutAdj;
+                    setAccountAdjustments({ ...accountAdjustments, cash: diff });
+                    setCashRealInput("");
+                    alert("ปรับยอดเงินสดสำเร็จ!");
+                  }}
+                  className="mt-2 w-full bg-[#2F6F5E] text-white py-2 rounded-xl text-xs font-bold"
+                >
+                  บันทึกยอดเงินสด
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🎯 Modal เพิ่มเป้าหมายการออม */}
+      {activeModal === "addGoal" && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-[#E4E1D6]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-bold">🎯 เพิ่มเป้าหมายการออม</h3>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleAddGoal} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">ชื่อเป้าหมาย</label>
+                <input
+                  type="text"
+                  placeholder="เช่น ซื้อไอโฟน, เก็บเงินเที่ยว"
+                  value={goalName}
+                  onChange={(e) => setGoalName(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">ยอดเป้าหมายรวม (บาท)</label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={goalTarget}
+                  onChange={(e) => setGoalTarget(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">เงินออมเริ่มต้น (ถ้ามี)</label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={goalCurrent}
+                  onChange={(e) => setGoalCurrent(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-[#1B211E] text-white py-3 rounded-xl font-bold text-sm shadow-md mt-2"
+              >
+                บันทึกเป้าหมาย
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 💰 Modal เติมเงินเข้าเป้าหมาย */}
+      {goalToDeposit && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-xs w-full text-center shadow-2xl border border-[#E4E1D6]">
+            <h3 className="text-base font-bold mb-1">💰 เติมเงินออม</h3>
+            <p className="text-xs text-[#63695F] mb-4">เป้าหมาย: {goalToDeposit.name}</p>
+            <input
+              type="number"
+              placeholder="จำนวนเงินที่ต้องการออมเพิ่ม"
+              value={depositAmount}
+              onChange={(e) => setDepositAmount(e.target.value)}
+              className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm text-center mb-4 focus:outline-none focus:border-[#2F6F5E]"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => setGoalToDeposit(null)}
+                className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-xl font-bold text-xs"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleDepositGoal}
+                className="flex-1 bg-[#2F6F5E] text-white py-2.5 rounded-xl font-bold text-xs"
+              >
+                ยืนยันเติมเงิน
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✏️ Modal แก้ไขเป้าหมายการออม */}
+      {goalToEdit && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-[#E4E1D6]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-bold">✏️ แก้ไขเป้าหมายการออม</h3>
+              <button
+                onClick={() => setGoalToEdit(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleUpdateGoal} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">ชื่อเป้าหมาย</label>
+                <input
+                  type="text"
+                  value={editGoalName}
+                  onChange={(e) => setEditGoalName(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">ยอดเป้าหมายรวม (บาท)</label>
+                <input
+                  type="number"
+                  value={editGoalTarget}
+                  onChange={(e) => setEditGoalTarget(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">เงินออมปัจจุบันสะสม (บาท)</label>
+                <input
+                  type="number"
+                  value={editGoalCurrent}
+                  onChange={(e) => setEditGoalCurrent(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-[#1B211E] text-white py-3 rounded-xl font-bold text-sm shadow-md mt-2"
+              >
+                บันทึกการแก้ไข
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 📌 Modal เพิ่มหนี้สินและรายการเบิก */}
+      {activeModal === "addDebt" && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-[#E4E1D6]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-bold">📌 เพิ่มหนี้สิน / รายการเบิก</h3>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleAddDebt} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">ประเภท</label>
+                <select
+                  value={debtType}
+                  onChange={(e) => setDebtType(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm bg-white focus:outline-none focus:border-[#2F6F5E]"
+                >
+                  <option value="creditor">เจ้าหนี้ (เราไปยืมเขามา)</option>
+                  <option value="debtor">ลูกหนี้ (เขายืมเงินเราไป)</option>
+                  <option value="reimburse">รายการเบิก (สำรองจ่าย / รอเบิกคืน)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">ชื่อบุคคล / คู่กรณี</label>
+                <input
+                  type="text"
+                  placeholder="เช่น พี่สมชาย, เพื่อนร่วมงาน"
+                  value={debtPerson}
+                  onChange={(e) => setDebtPerson(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">จำนวนเงิน (บาท)</label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={debtAmount}
+                  onChange={(e) => setDebtAmount(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">รายละเอียดเพิ่มเติม</label>
+                <input
+                  type="text"
+                  placeholder="เช่น ค่าอาหารกลางวัน, ยืมซื้อของ"
+                  value={debtNote}
+                  onChange={(e) => setDebtNote(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">กำหนดชำระคืน (ถ้ามี)</label>
+                <input
+                  type="date"
+                  value={debtDueDate}
+                  onChange={(e) => setDebtDueDate(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-[#1B211E] text-white py-3 rounded-xl font-bold text-sm shadow-md mt-2"
+              >
+                บันทึกรายการ
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 💬 Modal แชทซัพพอร์ต & AI บอทอัจฉริยะ */}
+      {activeModal === "chatSupport" && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full h-[85vh] flex flex-col shadow-2xl border border-[#E4E1D6] overflow-hidden">
+            <div className="bg-[#1B211E] text-white p-4 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-sm">💬 แชทซัพพอร์ต & AI บอท</h3>
+                <p className="text-[10px] text-[#C7CBC2]">สอบถามปัญหา หรือคุยกับ AI ได้ตลอด 24 ชม.</p>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
             </div>
 
-            <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50">
+            <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#F3F2ED]">
               {chatMessages.length === 0 ? (
-                <div className="text-center py-10 space-y-2">
-                  <div className="text-3xl">🤖💬</div>
-                  <p className="text-xs font-bold text-gray-700">สอบถามปัญหาหรือวิธีใช้งานได้เลย!</p>
-                  <p className="text-[11px] text-gray-400">พิมพ์มาได้ทุกรูปแบบ AI จะช่วยวิเคราะห์และตอบคำถามให้อัตโนมัติครับ</p>
+                <div className="text-center py-10 text-xs text-[#63695F]">
+                  ยังไม่มีข้อความสนทนา พิมพ์สอบถาม AI หรือปรึกษาปัญหาได้เลยครับ!
                 </div>
               ) : (
-                chatMessages.map((msg) => {
-                  const isAdmin = msg.sender === "admin";
+                chatMessages.map((m) => {
+                  const isUser = m.sender === "user";
                   return (
-                    <div key={msg.id} className={`flex flex-col ${isAdmin ? "items-start" : "items-end"}`}>
-                      <span className="text-[10px] text-gray-400 px-1 mb-0.5">{msg.senderName} • {msg.time}</span>
-                      <div className={`p-3 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-sm whitespace-pre-wrap ${
-                        isAdmin ? "bg-white text-gray-800 border border-gray-200 rounded-tl-sm" : "bg-[#1E1E1E] text-white rounded-tr-sm"
-                      }`}>
-                        {msg.text}
+                    <div key={m.id} className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+                      <div className="text-[10px] text-[#63695F] mb-0.5 px-1">{m.senderName}</div>
+                      <div
+                        className={`max-w-[80%] p-3 rounded-2xl text-xs whitespace-pre-wrap ${
+                          isUser
+                            ? "bg-[#2F6F5E] text-white rounded-br-none"
+                            : "bg-white text-[#1B211E] border border-[#E4E1D6] rounded-bl-none shadow-sm"
+                        }`}
+                      >
+                        {m.text}
                       </div>
+                      <div className="text-[9px] text-gray-400 mt-1 px-1">{m.time}</div>
                     </div>
                   );
                 })
               )}
             </div>
 
-            <form onSubmit={handleSendUserChat} className="p-3 border-t bg-white flex gap-2 shrink-0">
+            <form onSubmit={handleSendUserChat} className="p-3 bg-white border-t border-[#E4E1D6] flex gap-2">
               <input
                 type="text"
-                placeholder="พิมพ์ข้อความสอบถาม (เช่น ใช้แอปยังไง, เลื่อนไม่ได้)..."
+                placeholder="พิมพ์ข้อความสอบถาม AI..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                className="flex-1 px-4 py-2.5 border rounded-2xl text-xs bg-gray-50 font-medium"
-                required
+                className="flex-1 p-3 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
               />
-              <button type="submit" className="px-5 py-2.5 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold shadow-sm hover:bg-black transition">
+              <button
+                type="submit"
+                className="bg-[#2F6F5E] text-white px-5 rounded-xl text-xs font-bold shadow-md hover:bg-[#255749] transition"
+              >
                 ส่ง
               </button>
             </form>
@@ -1216,398 +1258,970 @@ function App() {
         </div>
       )}
 
-      {/* 💬 Modal แอดมินตอบแชทลูกค้าแต่ละห้อง */}
-      {adminSelectedUserChat && (
-        <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl flex flex-col h-[85vh] overflow-hidden">
-            <div className="p-4 border-b flex justify-between items-center bg-[#8C6D23] text-white shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-white text-[#8C6D23] flex items-center justify-center font-bold overflow-hidden border">
-                  {adminSelectedUserChat.avatar ? <img src={adminSelectedUserChat.avatar} className="w-full h-full object-cover" /> : adminSelectedUserChat.userName.charAt(0)}
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold">ห้องแชทกับ: {adminSelectedUserChat.userName}</h3>
-                  <p className="text-[10px] text-amber-200">Device ID: {adminSelectedUserChat.id}</p>
-                </div>
+      {/* 📊 Modal รายการประวัติทั้งหมด */}
+      {activeModal === "historyList" && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full h-[85vh] flex flex-col shadow-2xl border border-[#E4E1D6] overflow-hidden">
+            <div className="bg-[#1B211E] text-white p-4 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-sm">📜 รายการประวัติทั้งหมด</h3>
+                <p className="text-[10px] text-[#C7CBC2]">รวมธุรกรรมรายรับ-รายจ่าย ทั้งหมด ({transactions.length} รายการ)</p>
               </div>
-              <button onClick={() => setAdminSelectedUserChat(null)} className="text-white text-xl font-bold p-1">✕</button>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
             </div>
 
-            <AdminChatRoom targetUserId={adminSelectedUserChat.id} />
+            <div className="flex-1 p-4 overflow-y-auto space-y-2.5 bg-[#F3F2ED]">
+              {transactions.length === 0 ? (
+                <div className="text-center py-10 text-xs text-[#63695F]">ยังไม่มีประวัติธุรกรรม</div>
+              ) : (
+                transactions.map((t) => {
+                  const info = categoryInfo(t.category);
+                  return (
+                    <div
+                      key={t.id}
+                      className="bg-white p-3.5 rounded-xl border border-[#E4E1D6] flex justify-between items-center shadow-sm"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: info.color }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold truncate">{info.label}</div>
+                          <div className="text-[11px] text-[#63695F] truncate">
+                            {t.note || "-"} · {formatDateThai(t.date)} ({ACCOUNT_LABEL[t.account] || t.account})
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span
+                          className={`text-xs font-bold ${
+                            t.type === "income" ? "text-emerald-600" : "text-rose-600"
+                          }`}
+                        >
+                          {t.type === "income" ? "+" : "-"}{formatMoney(t.amount)}
+                        </span>
+                        <button
+                          onClick={() => setItemToDelete({ type: "transaction", id: t.id })}
+                          className="text-gray-400 hover:text-red-600 text-xs font-bold p-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-            <form onSubmit={handleSendAdminChat} className="p-3 border-t bg-white flex gap-2 shrink-0">
-              <input
-                type="text"
-                placeholder={`ตอบกลับ ${adminSelectedUserChat.userName}...`}
-                value={adminChatInput}
-                onChange={(e) => setAdminChatInput(e.target.value)}
-                className="flex-1 px-4 py-2.5 border rounded-2xl text-xs bg-gray-50 font-medium"
-                required
-              />
-              <button type="submit" className="px-5 py-2.5 bg-[#8C6D23] text-white rounded-2xl text-xs font-bold shadow-sm">
-                ส่งข้อความ
+      {/* 💳 Modal วางแผนการเงิน / จัดสรรงบเป็นเซ็ต */}
+      {activeModal === "budgetPlanner" && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full h-[85vh] flex flex-col shadow-2xl border border-[#E4E1D6] overflow-hidden">
+            <div className="bg-[#1B211E] text-white p-4 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-sm">💳 วางแผนการเงิน / จัดสรรงบเป็นเซ็ต</h3>
+                <p className="text-[10px] text-[#C7CBC2]">สร้างเซ็ตงบประมาณประจำเดือน (เช่น Set 1, Set 2)</p>
+              </div>
+              <button
+                onClick={() => setActiveModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-[#F3F2ED]">
+              {/* ฟอร์มสร้างเซ็ตใหม่ */}
+              <div className="bg-white p-4 rounded-xl border border-[#E4E1D6] shadow-sm">
+                <h4 className="text-xs font-bold mb-3 text-[#1B211E]">➕ สร้างเซ็ตงบประมาณใหม่</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#63695F] mb-1">ชื่อเซ็ตงบ</label>
+                    <input
+                      type="text"
+                      placeholder="เช่น งบเดือนนี้, งบเงินเดือน"
+                      value={newSetName}
+                      onChange={(e) => setNewSetName(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#63695F] mb-1">ยอดเงินรวมของเซ็ตนี้ (บาท)</label>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={newSetTotal}
+                      onChange={(e) => setNewSetTotal(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!newSetName.trim() || !newSetTotal) return;
+                      const newSet = {
+                        id: Date.now().toString(),
+                        name: newSetName.trim(),
+                        total: parseFloat(newSetTotal),
+                        allocations: { ...setAllocations },
+                      };
+                      setBudgetSets([...budgetSets, newSet]);
+                      if (!activeBudgetSetId) setActiveBudgetSetId(newSet.id);
+                      setNewSetName("");
+                      setNewSetTotal("");
+                      setSetAllocations({});
+                      alert("สร้างเซ็ตงบประมาณสำเร็จ!");
+                    }}
+                    className="w-full bg-[#2F6F5E] text-white py-2.5 rounded-xl text-xs font-bold"
+                  >
+                    บันทึกเซ็ตงบประมาณ
+                  </button>
+                </div>
+              </div>
+
+              {/* รายการเซ็ตงบที่มี */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-[#1B211E]">📋 เซ็ตงบประมาณของคุณ</h4>
+                {budgetSets.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-[#63695F] bg-white rounded-xl border border-[#E4E1D6]">
+                    ยังไม่มีเซ็ตงบประมาณ
+                  </div>
+                ) : (
+                  budgetSets.map((set) => {
+                    const isActive = activeBudgetSetId === set.id;
+                    return (
+                      <div
+                        key={set.id}
+                        className={`p-4 rounded-xl border ${
+                          isActive ? "border-[#2F6F5E] bg-[#2F6F5E]/5" : "border-[#E4E1D6] bg-white"
+                        } shadow-sm`}
+                      >
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="font-bold text-xs">{set.name}</div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setActiveBudgetSetId(isActive ? "" : set.id)}
+                              className={`px-3 py-1 rounded-lg text-[10px] font-bold ${
+                                isActive ? "bg-[#2F6F5E] text-white" : "bg-gray-100 text-gray-700"
+                              }`}
+                            >
+                              {isActive ? "ใช้งานอยู่" : "เลือกใช้"}
+                            </button>
+                            <button
+                              onClick={() => setItemToDelete({ type: "budgetSet", id: set.id })}
+                              className="text-gray-400 hover:text-red-600 text-xs font-bold p-1"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-xs font-bold text-[#2F6F5E] mb-1">
+                          งบรวม: {formatMoney(set.total)} บาท
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🛡️ Modal แอดมินล็อกอิน */}
+      {showAdminLogin && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-[#E4E1D6]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-bold">🛡️ เข้าสู่ระบบผู้ดูแลระบบ (Admin)</h3>
+              <button
+                onClick={() => setShowAdminLogin(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleAdminLogin} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">ชื่อผู้ใช้</label>
+                <input
+                  type="text"
+                  placeholder="admin"
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#63695F] mb-1">รหัสผ่าน</label>
+                <input
+                  type="password"
+                  placeholder="••••"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+              {adminLoginError && <div className="text-xs text-red-600 font-bold">{adminLoginError}</div>}
+              <button
+                type="submit"
+                className="w-full bg-[#1B211E] text-white py-3 rounded-xl font-bold text-sm shadow-md mt-2"
+              >
+                เข้าสู่ระบบแอดมิน
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Modals ทั่วไปอื่นๆ */}
-      {itemToDelete && (
-        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-xl mx-auto">🗑️</div>
-            <h3 className="text-base font-bold text-gray-800">ยืนยันการลบเซ็ตแผนการเงินนี้?</h3>
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => setItemToDelete(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold">ยกเลิก</button>
-              <button onClick={confirmDelete} className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold">ยืนยันลบ</button>
+      {/* 🚨 Modal แจ้งปัญหา / ข้อเสนอแนะ */}
+      {showReportModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-[#E4E1D6]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-bold">🚨 แจ้งปัญหา / ข้อเสนอแนะ</h3>
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {pendingSlip && (
-        <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b pb-3">
-              <div>
-                <h3 className="text-base font-bold text-gray-900">🧾 ยืนยันรายการจากสลิป</h3>
-                <p className="text-xs text-emerald-600 font-bold">ยอดเงิน: {formatMoney(pendingSlip.amount)} บาท</p>
-              </div>
-              <button onClick={() => setPendingSlip(null)} className="text-gray-400 text-lg font-bold">✕</button>
-            </div>
-            <form onSubmit={handleConfirmSlip} className="space-y-3 text-xs">
-              <div>
-                <label className="text-gray-500 block mb-1">เลือกหมวดหมู่จริง</label>
-                <select value={slipCategory} onChange={(e) => setSlipCategory(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl bg-gray-50 font-bold">
-                  {EXPENSE_CATEGORIES.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
-                </select>
-              </div>
-              {slipCategory === "other_exp" && (
-                <div>
-                  <label className="text-gray-500 block mb-1">ระบุรายละเอียด (ค่าอะไร?)</label>
-                  <input type="text" placeholder="เช่น ค่าซ่อมรถ" value={slipCustomNote} onChange={(e) => setSlipCustomNote(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" required />
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-gray-500 block mb-1">วันที่</label>
-                  <input type="date" value={pendingSlip.date} onChange={(e) => setPendingSlip({ ...pendingSlip, date: e.target.value })} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" />
-                </div>
-                <div>
-                  <label className="text-gray-500 block mb-1">เวลา</label>
-                  <input type="text" placeholder="14:30" value={slipTime} onChange={(e) => setSlipTime(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" />
-                </div>
-              </div>
-              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl font-bold">✓ บันทึกรายการนี้</button>
+            <form onSubmit={handleSendReport} className="space-y-3">
+              <textarea
+                placeholder="พิมพ์รายละเอียดปัญหาหรือข้อเสนอแนะของคุณที่นี่..."
+                value={reportText}
+                onChange={(e) => setReportText(e.target.value)}
+                className="w-full p-3 rounded-xl border border-[#E4E1D6] text-xs h-32 focus:outline-none focus:border-[#2F6F5E]"
+                required
+              />
+              <button
+                type="submit"
+                className="w-full bg-[#1B211E] text-white py-3 rounded-xl font-bold text-sm shadow-md"
+              >
+                ส่งข้อความถึงแอดมิน
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      {goalToDeposit && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-xl space-y-4">
-            <div className="flex justify-between items-center border-b pb-2">
-              <h3 className="text-base font-bold text-gray-800">💰 เติมเงินออม: {goalToDeposit.name}</h3>
-              <button onClick={() => setGoalToDeposit(null)} className="text-gray-400 text-lg">✕</button>
-            </div>
-            <form onSubmit={handleDepositGoal} className="space-y-3">
-              <input type="number" placeholder="0.00" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-50" required />
-              <button type="submit" className="w-full bg-[#1B5E20] text-white py-2.5 rounded-xl text-xs font-bold">ยืนยันการเติมเงิน</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {goalToEdit && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl space-y-4">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-base font-bold text-gray-800">✏️ แก้ไขเป้าหมายการออม</h3>
-              <button onClick={() => setGoalToEdit(null)} className="text-gray-400 text-lg font-bold">✕</button>
-            </div>
-            <form onSubmit={handleUpdateGoal} className="space-y-3 text-xs">
-              <input type="text" value={editGoalName} onChange={(e) => setEditGoalName(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
-              <div className="grid grid-cols-2 gap-2">
-                <input type="number" value={editGoalTarget} onChange={(e) => setEditGoalTarget(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
-                <input type="number" value={editGoalCurrent} onChange={(e) => setEditGoalCurrent(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
-              </div>
-              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-xl font-bold">💾 บันทึกการแก้ไข</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Main Container */}
-      <div className="max-w-5xl mx-auto px-4 pt-6 space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsMenuOpen(true)} className="p-2.5 bg-white rounded-2xl border border-gray-200 shadow-sm hover:bg-gray-50 text-xl">☰</button>
-            <h1 className="text-xl font-bold text-[#1E1E1E]">งบประมาณของฉัน</h1>
-          </div>
-          <button
-            onClick={() => (isAdminLoggedIn ? setIsAdminLoggedIn(false) : setShowAdminLogin(true))}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-              isAdminLoggedIn ? "bg-[#1E1E1E] text-white border-[#1E1E1E]" : "bg-white text-gray-600 border-gray-200"
-            }`}
-          >
-            🛡️ {isAdminLoggedIn ? "ออกจากระบบ Admin" : "ผู้ดูแลระบบ"}
-          </button>
-        </div>
-
-        {isAdminLoggedIn && (
-          <div className="bg-[#FFFDF6] border-2 border-[#EADBBD] rounded-3xl p-5 space-y-5 shadow-md">
-            <div className="flex justify-between items-center border-b border-[#EADBBD] pb-2">
-              <h3 className="text-sm font-bold text-[#8C6D23] flex items-center gap-2">
-                <span>🛡️</span> ระบบหลังบ้านผู้ดูแลระบบ (Firebase Cloud Dashboard)
-              </h3>
-              <span className="text-[10px] bg-emerald-500 text-white px-2.5 py-0.5 rounded-full font-bold animate-pulse">REAL-TIME ONLINE</span>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-amber-200 space-y-3 shadow-sm">
-              <h4 className="text-xs font-extrabold text-amber-800 flex items-center gap-1.5">
-                <span>📢</span> ส่งข้อความประกาศแจ้งเตือน (เด้งขึ้นหน้าจอผู้ใช้)
-              </h4>
-              <form onSubmit={handleSendAnnouncement} className="space-y-2">
-                <textarea rows="2" placeholder="พิมพ์ข้อความประกาศ..." value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs bg-gray-50 font-medium" required />
-                <div className="flex gap-2">
-                  <button type="submit" className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm">🚀 ส่งประกาศเด้งหน้าจอผู้ใช้</button>
-                  {activeAnnouncement && (
-                    <button type="button" onClick={handleClearAnnouncement} className="py-2 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold border border-rose-200">🗑️ ปิดประกาศ</button>
+      {/* ☰ เมนูด้านข้าง (Slide-out Menu) */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex justify-end backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white w-80 h-full p-5 flex flex-col shadow-2xl overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 border-b border-[#E4E1D6] pb-4">
+              <div className="flex items-center gap-3">
+                <div
+                  onClick={() => avatarInputRef.current && avatarInputRef.current.click()}
+                  className="w-12 h-12 rounded-full bg-[#2F6F5E] text-white flex items-center justify-center font-bold text-lg overflow-hidden cursor-pointer shadow-inner"
+                >
+                  {userAvatar ? (
+                    <img src={userAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    userName.charAt(0).toUpperCase() || "U"
                   )}
                 </div>
-              </form>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    try {
+                      const { base64Data } = await resizeImage(file, 200);
+                      setUserAvatar(`data:image/jpeg;base64,${base64Data}`);
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                />
+                <div>
+                  <div className="font-bold text-sm">{userName || "ผู้ใช้งาน"}</div>
+                  <div className="text-[10px] text-[#63695F]">ID: {deviceId.slice(0, 8)}</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsMenuOpen(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-sm"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                <span>💬</span> ห้องแชทและรายชื่อผู้ใช้งาน ({onlineUsers.length} คน) - คลิกชื่อเพื่อเปิดแชทตอบลูกค้า
-              </h4>
-              {onlineUsers.length === 0 ? (
-                <p className="text-xs text-gray-400">ยังไม่มีข้อมูลผู้ใช้งานซิงก์เข้ามา</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+            <div className="space-y-2 flex-1">
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setActiveModal("chatSupport");
+                }}
+                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
+              >
+                <span>💬</span> แชทซัพพอร์ต (พร้อม AI บอทอัจฉริยะ)
+              </button>
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setActiveModal("historyList");
+                }}
+                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
+              >
+                <span>📜</span> รายการประวัติทั้งหมด ({transactions.length})
+              </button>
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setActiveModal("budgetPlanner");
+                }}
+                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
+              >
+                <span>💳</span> วางแผนการเงิน / จัดสรรงบเป็นเซ็ต
+              </button>
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setActiveModal("adjustAccount");
+                }}
+                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
+              >
+                <span>🛠️</span> ปรับปรุงยอดเงินบัญชี
+              </button>
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setShowReportModal(true);
+                }}
+                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
+              >
+                <span>🚨</span> แจ้งปัญหา / ข้อเสนอแนะ
+              </button>
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setTutorialStep(1);
+                }}
+                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
+              >
+                <span>📖</span> คู่มือการใช้งานแอป
+              </button>
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setShowAdminLogin(true);
+                }}
+                className="w-full p-3 rounded-xl bg-[#1B211E] text-white hover:bg-black transition flex items-center gap-3 text-xs font-bold text-left shadow-md mt-4"
+              >
+                <span>🛡️</span> เข้าสู่ระบบผู้ดูแลระบบ (Admin)
+              </button>
+            </div>
+
+            <div className="pt-4 border-t border-[#E4E1D6] text-center text-[10px] text-[#63695F]">
+              Budget Planner v2.5 · ปลอดภัยและใช้งานง่าย
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🛡️ หน้าต่างจัดการระบบ Admin (เมื่อล็อกอินแล้ว) */}
+      {isAdminLoggedIn && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-2xl w-full h-[90vh] flex flex-col shadow-2xl border border-[#E4E1D6] overflow-hidden">
+            <div className="bg-[#1B211E] text-white p-4 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-sm">🛡️ ระบบจัดการผู้ดูแลระบบ (Admin Control Panel)</h3>
+                <p className="text-[10px] text-[#C7CBC2]">ควบคุมระบบ ประกาศข้อความ และดูแลผู้ใช้งาน</p>
+              </div>
+              <button
+                onClick={() => setIsAdminLoggedIn(false)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 p-5 overflow-y-auto space-y-6 bg-[#F3F2ED]">
+              {/* บรอดแคสต์ประกาศ */}
+              <div className="bg-white p-4 rounded-xl border border-[#E4E1D6] shadow-sm">
+                <h4 className="text-xs font-bold mb-2 text-[#1B211E]">📢 ส่งประกาศแจ้งเตือนถึงผู้ใช้ทุกคน</h4>
+                <form onSubmit={handleSendAnnouncement} className="space-y-3">
+                  <textarea
+                    placeholder="พิมพ์ข้อความประกาศสำคัญ..."
+                    value={announcementText}
+                    onChange={(e) => setAnnouncementText(e.target.value)}
+                    className="w-full p-3 rounded-xl border border-[#E4E1D6] text-xs h-24 focus:outline-none focus:border-[#2F6F5E]"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="bg-[#2F6F5E] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md"
+                  >
+                    ส่งประกาศทันที
+                  </button>
+                </form>
+              </div>
+
+              {/* รายชื่อผู้ใช้ออนไลน์ */}
+              <div className="bg-white p-4 rounded-xl border border-[#E4E1D6] shadow-sm">
+                <h4 className="text-xs font-bold mb-3 text-[#1B211E]">🟢 ผู้ใช้งานทั้งหมดในระบบ ({onlineUsers.length})</h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
                   {onlineUsers.map((u) => {
-                    const statusInfo = formatUserStatus(u.lastActive);
+                    const status = formatUserStatus(u.lastActive);
                     return (
-                      <div key={u.id} className="flex items-center justify-between p-3 bg-white rounded-2xl border border-gray-200 shadow-sm text-xs hover:border-amber-400 transition">
-                        <div onClick={() => setAdminSelectedUserChat(u)} className="flex items-center gap-3 flex-1 cursor-pointer">
-                          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-600 overflow-hidden border shrink-0">
-                            {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.userName.charAt(0)}
+                      <div
+                        key={u.id}
+                        className="p-3 rounded-xl bg-[#F3F2ED] flex justify-between items-center text-xs"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-[#2F6F5E] text-white flex items-center justify-center font-bold text-xs">
+                            {u.avatar ? (
+                              <img src={u.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
+                            ) : (
+                              u.userName.charAt(0).toUpperCase()
+                            )}
                           </div>
-                          <div className="truncate">
-                            <p className="font-bold text-gray-800 flex items-center gap-1.5">
-                              <span>{u.userName}</span>
-                              <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded-md">💬 เปิดแชท</span>
-                            </p>
-                            <p className={`text-[10px] font-semibold ${statusInfo.isOnline ? "text-emerald-600" : "text-gray-400"}`}>
-                              {statusInfo.text}
-                            </p>
+                          <div>
+                            <div className="font-bold">{u.userName}</div>
+                            <div className="text-[10px] text-[#63695F]">
+                              ยอดเงิน: {formatMoney(u.balance)} บาท · {status.text}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <div className="text-right">
-                            <p className="text-[10px] text-gray-400">เงินคงเหลือ</p>
-                            <p className="font-extrabold text-emerald-600">{formatMoney(u.balance)} บ.</p>
-                          </div>
-                          <button onClick={() => handleDeleteUser(u.id)} className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-xl transition text-sm" title="ลบผู้ใช้">🗑️</button>
-                        </div>
+                        <button
+                          onClick={() => setAdminSelectedUserChat(u)}
+                          className="bg-[#1B211E] text-white px-3 py-1.5 rounded-lg text-[10px] font-bold"
+                        >
+                          แชทคุย
+                        </button>
                       </div>
                     );
                   })}
                 </div>
-              )}
-            </div>
+              </div>
 
-            <div className="space-y-2 pt-3 border-t border-[#EADBBD]">
-              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                <span>📋</span> รายการแจ้งปัญหา ({reports.length} รายการ)
-              </h4>
-              {reports.length > 0 ? (
-                <div className="max-h-40 overflow-y-auto space-y-2">
-                  {reports.map((r) => (
-                    <div key={r.id} className="bg-white p-3 rounded-2xl border border-rose-100 text-xs shadow-sm">
-                      <div className="flex justify-between text-gray-400 text-[10px] mb-1">
-                        <span className="font-bold text-rose-600">👤 {r.userName}</span>
-                        <span>{r.date}</span>
+              {/* รายงานปัญหาจากผู้ใช้ */}
+              <div className="bg-white p-4 rounded-xl border border-[#E4E1D6] shadow-sm">
+                <h4 className="text-xs font-bold mb-3 text-[#1B211E]">🚨 รายงานปัญหา / ข้อเสนอแนะจากผู้ใช้</h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {reports.length === 0 ? (
+                    <div className="text-center py-4 text-xs text-[#63695F]">ไม่มีรายงานปัญหา</div>
+                  ) : (
+                    reports.map((r) => (
+                      <div key={r.id} className="p-3 rounded-xl bg-[#F3F2ED] text-xs">
+                        <div className="flex justify-between font-bold mb-1">
+                          <span>{r.userName}</span>
+                          <span className="text-[10px] text-gray-500">{r.time}</span>
+                        </div>
+                        <p className="text-[#333] whitespace-pre-wrap">{r.text}</p>
                       </div>
-                      <p className="text-gray-800 font-medium">{r.text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[11px] text-gray-400">ยังไม่มีรายการแจ้งปัญหาในขณะนี้</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className="lg:col-span-5 space-y-4">
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">โปรไฟล์</h2>
-              <div className="flex items-center gap-4">
-                <div onClick={() => avatarInputRef.current?.click()} className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 cursor-pointer overflow-hidden border">
-                  {userAvatar ? <img src={userAvatar} className="w-full h-full object-cover" /> : <span className="text-xl">?</span>}
-                  <input type="file" ref={avatarInputRef} accept="image/*" className="hidden" onChange={handleAvatarChange} />
-                </div>
-                <div className="flex-1">
-                  <label className="text-[11px] text-gray-400 block mb-1">ชื่อที่แสดง</label>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold">{userName || "ผู้ใช้ทั่วไป"}</span>
-                    <button onClick={() => setUserName(prompt("เปลี่ยนชื่อผู้ใช้:", userName) || userName)} className="text-xs text-gray-400">✏️ แก้ไข</button>
-                  </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="bg-[#1E1E1E] text-white rounded-3xl p-6 shadow-md space-y-5">
+      {/* 💬 Admin Chat กับผู้ใช้รายบุคคล */}
+      {adminSelectedUserChat && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full h-[80vh] flex flex-col shadow-2xl border border-[#E4E1D6] overflow-hidden">
+            <div className="bg-[#1B211E] text-white p-4 flex justify-between items-center">
               <div>
-                <p className="text-xs text-gray-400">คงเหลือทั้งหมด</p>
-                <h2 className="text-3xl font-extrabold mt-1">
-                  {formatMoney(totalBalance)} <span className="text-sm font-normal text-gray-400">บาท</span>
-                </h2>
+                <h3 className="font-bold text-sm">💬 แชทกับ: {adminSelectedUserChat.userName}</h3>
+                <p className="text-[10px] text-[#C7CBC2]">ID: {adminSelectedUserChat.id}</p>
               </div>
+              <button
+                onClick={() => setAdminSelectedUserChat(null)}
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
 
-              <div className="pt-3 border-t border-gray-800 space-y-3">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-300 font-bold">📊 สัดส่วนรายจ่ายคร่าวๆ</span>
-                  <span className="text-gray-400 font-medium">รวม: {formatMoney(totalExpense)} บ.</span>
+            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#F3F2ED]">
+              {chatMessages.length === 0 ? (
+                <div className="text-center py-10 text-xs text-[#63695F]">ยังไม่มีข้อความ</div>
+              ) : (
+                chatMessages.map((m) => {
+                  const isAdminMsg = m.sender === "admin";
+                  return (
+                    <div key={m.id} className={`flex flex-col ${isAdminMsg ? "items-end" : "items-start"}`}>
+                      <div className="text-[10px] text-[#63695F] mb-0.5 px-1">{m.senderName}</div>
+                      <div
+                        className={`max-w-[80%] p-3 rounded-2xl text-xs whitespace-pre-wrap ${
+                          isAdminMsg
+                            ? "bg-[#2F6F5E] text-white rounded-br-none"
+                            : "bg-white text-[#1B211E] border border-[#E4E1D6] rounded-bl-none shadow-sm"
+                        }`}
+                      >
+                        {m.text}
+                      </div>
+                      <div className="text-[9px] text-gray-400 mt-1 px-1">{m.time}</div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <form onSubmit={handleSendAdminChat} className="p-3 bg-white border-t border-[#E4E1D6] flex gap-2">
+              <input
+                type="text"
+                placeholder="พิมพ์ข้อความตอบกลับในฐานะ Admin..."
+                value={adminChatInput}
+                onChange={(e) => setAdminChatInput(e.target.value)}
+                className="flex-1 p-3 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
+              />
+              <button
+                type="submit"
+                className="bg-[#2F6F5E] text-white px-5 rounded-xl text-xs font-bold shadow-md"
+              >
+                ส่ง
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 หน้าจอหลัก (Main Content) */}
+      <div className="max-w-2xl mx-auto px-4 pt-6">
+        {/* Header Bar */}
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div
+              onClick={() => avatarInputRef.current && avatarInputRef.current.click()}
+              className="w-12 h-12 rounded-full bg-[#2F6F5E] text-white flex items-center justify-center font-bold text-lg overflow-hidden cursor-pointer shadow-md"
+            >
+              {userAvatar ? (
+                <img src={userAvatar} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                userName.charAt(0).toUpperCase() || "U"
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-[#63695F]">สวัสดีครับ 👋</div>
+              <div className="font-bold text-base">{userName || "ผู้ใช้งาน"}</div>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsMenuOpen(true)}
+            className="w-11 h-11 rounded-2xl bg-white border border-[#E4E1D6] flex items-center justify-center font-bold text-lg shadow-sm hover:bg-gray-50 transition"
+          >
+            ☰
+          </button>
+        </div>
+
+        {/* Hero Balance Card */}
+        <div className="bg-[#1B211E] text-white rounded-3xl p-6 mb-6 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-[#2F6F5E]/20 rounded-full blur-2xl pointer-events-none" />
+          <div className="text-xs text-[#C7CBC2] mb-1 font-medium">ยอดคงเหลือรวมทั้งหมด</div>
+          <div className="text-3xl font-extrabold tracking-tight mb-4">{formatMoney(totalBalance)} บาท</div>
+
+          <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/10 text-xs">
+            <div>
+              <div className="text-[#C7CBC2] text-[11px]">ธนาคาร</div>
+              <div className="font-bold text-emerald-400 text-sm">{formatMoney(calcBankTotal)}</div>
+            </div>
+            <div>
+              <div className="text-[#C7CBC2] text-[11px]">เงินสด</div>
+              <div className="font-bold text-amber-400 text-sm">{formatMoney(calcCashTotal)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 📷 กล่องสแกนสลิป AI อัตโนมัติ */}
+        <div className="bg-white rounded-3xl p-5 mb-6 border border-[#E4E1D6] shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <span>📷</span> สแกนสลิปโอนเงินอัตโนมัติด้วย AI
+            </h3>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          <div
+            onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            className="border-2 border-dashed border-[#E4E1D6] rounded-2xl p-6 text-center bg-[#F3F2ED] hover:bg-[#E4E1D6]/50 transition cursor-pointer"
+          >
+            {scanning ? (
+              <div className="text-xs font-bold text-[#2F6F5E] animate-pulse">{scanMessage}</div>
+            ) : (
+              <>
+                <div className="text-2xl mb-1">📤</div>
+                <div className="text-xs font-bold">แตะเพื่อเลือกรูปภาพสลิปโอนเงิน</div>
+                <div className="text-[10px] text-[#63695F] mt-0.5">รองรับสลิปธนาคารทุกแอปพลิเคชัน</div>
+              </>
+            )}
+          </div>
+
+          {/* พรีวิวข้อมูลสลิปที่ AI อ่านได้ */}
+          {pendingSlip && (
+            <div className="mt-4 p-4 rounded-2xl bg-[#F3F2ED] border border-[#E4E1D6] space-y-3">
+              <div className="text-xs font-bold text-[#2F6F5E]">✨ ตรวจพบข้อมูลสลิปสำเร็จ! ตรวจสอบและกดยืนยัน:</div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#63695F] mb-1">จำนวนเงิน (บาท)</label>
+                <input
+                  type="number"
+                  value={pendingSlip.amount}
+                  onChange={(e) => setPendingSlip({ ...pendingSlip, amount: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-[#E4E1D6] text-xs font-bold bg-white"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-[#63695F] mb-1">หมวดหมู่</label>
+                  <select
+                    value={slipCategory}
+                    onChange={(e) => setSlipCategory(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-[#E4E1D6] text-xs bg-white"
+                  >
+                    {EXPENSE_CATEGORIES.map((c) => (
+                      <option key={c.key} value={c.key}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-[#63695F] mb-1">วันที่</label>
+                  <input
+                    type="date"
+                    value={pendingSlip.date}
+                    onChange={(e) => setPendingSlip({ ...pendingSlip, date: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-[#E4E1D6] text-xs bg-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#63695F] mb-1">บันทึกช่วยจำ / ผู้รับโอน</label>
+                <input
+                  type="text"
+                  value={pendingSlip.note}
+                  onChange={(e) => setPendingSlip({ ...pendingSlip, note: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-[#E4E1D6] text-xs bg-white"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setPendingSlip(null)}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-xl text-xs font-bold"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={confirmPendingSlip}
+                  className="flex-1 bg-[#2F6F5E] text-white py-2.5 rounded-xl text-xs font-bold shadow-md"
+                >
+                  ยืนยันเพิ่มรายการ
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
-                {categoryExpenses.length === 0 ? (
-                  <p className="text-[11px] text-gray-500 text-center py-2">ยังไม่มีข้อมูลรายจ่ายในระบบ</p>
-                ) : (
-                  <div className="flex items-center gap-4 py-1">
-                    <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
-                      <div className="w-full h-full rounded-full shadow-inner" style={{ background: `conic-gradient(${generatePieChartGradient()})` }} />
-                      <div className="absolute inset-2 bg-[#1E1E1E] rounded-full flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-gray-300">EXP</span>
+        {/* 📝 ฟอร์มบันทึกรายรับ-รายจ่ายปกติ */}
+        <div className="bg-white rounded-3xl p-5 mb-6 border border-[#E4E1D6] shadow-sm">
+          <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+            <span>✍️</span> บันทึกรายการใหม่
+          </h3>
+
+          <div className="flex gap-1.5 p-1 bg-[#F3F2ED] rounded-2xl mb-4">
+            <button
+              type="button"
+              onClick={() => {
+                setType("expense");
+                setCategory(EXPENSE_CATEGORIES[0].key);
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${
+                type === "expense" ? "bg-rose-600 text-white shadow-md" : "text-[#63695F]"
+              }`}
+            >
+              รายจ่าย
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setType("income");
+                setCategory(INCOME_CATEGORIES[0].key);
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${
+                type === "income" ? "bg-emerald-600 text-white shadow-md" : "text-[#63695F]"
+              }`}
+            >
+              รายรับ
+            </button>
+          </div>
+
+          <form onSubmit={handleAddTransaction} className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold text-[#63695F] mb-1">กระเป๋าเงิน</label>
+                <select
+                  value={account}
+                  onChange={(e) => setAccount(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-xs bg-white focus:outline-none focus:border-[#2F6F5E]"
+                >
+                  {ACCOUNTS.map((a) => (
+                    <option key={a.key} value={a.key}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#63695F] mb-1">จำนวนเงิน (บาท)</label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-xs font-bold focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold text-[#63695F] mb-1">หมวดหมู่</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-xs bg-white focus:outline-none focus:border-[#2F6F5E]"
+                >
+                  {(type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.label}
+                    </option>
+                  ))}
+                  <option value="other">อื่นๆ (กำหนดเอง)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#63695F] mb-1">วันที่</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-xs bg-white focus:outline-none focus:border-[#2F6F5E]"
+                />
+              </div>
+            </div>
+
+            {category === "other" && (
+              <div>
+                <label className="block text-[10px] font-bold text-[#63695F] mb-1">ระบุชื่อหมวดหมู่</label>
+                <input
+                  type="text"
+                  placeholder="เช่น ซื้อของเบ็ดเตล็ด"
+                  value={customCategoryNote}
+                  onChange={(e) => setCustomCategoryNote(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
+                  required
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[10px] font-bold text-[#63695F] mb-1">บันทึกช่วยจำ (ไม่บังคับ)</label>
+              <input
+                type="text"
+                placeholder="เช่น ค่าข้าวเที่ยง, ซื้อกาแฟ"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="w-full p-3 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-[#1B211E] text-white py-3.5 rounded-xl font-bold text-xs shadow-md hover:bg-black transition mt-1"
+            >
+              + บันทึกรายการ
+            </button>
+          </form>
+        </div>
+
+        {/* 🎯 เป้าหมายการออม */}
+        <div className="bg-white rounded-3xl p-5 mb-6 border border-[#E4E1D6] shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <span>🎯</span> เป้าหมายการออมเงิน
+            </h3>
+            <button
+              onClick={() => setActiveModal("addGoal")}
+              className="bg-[#2F6F5E] text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm"
+            >
+              + เพิ่มเป้าหมาย
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {savingsGoals.length === 0 ? (
+              <div className="text-center py-6 text-xs text-[#63695F]">ยังไม่มีเป้าหมายการออม กดเพิ่มได้เลย!</div>
+            ) : (
+              savingsGoals.map((g) => {
+                const percent = Math.min(Math.round((g.current / g.target) * 100), 100);
+                return (
+                  <div key={g.id} className="p-4 rounded-2xl bg-[#F3F2ED] border border-[#E4E1D6] space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="font-bold text-xs">{g.name}</div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setGoalToEdit(g)}
+                          className="text-[10px] font-bold text-gray-500 hover:text-black"
+                        >
+                          แก้ไข
+                        </button>
+                        <button
+                          onClick={() => setItemToDelete({ type: "goal", id: g.id })}
+                          className="text-gray-400 hover:text-red-600 text-xs font-bold"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
-                    <div className="flex-1 space-y-1.5 max-h-28 overflow-y-auto pr-1">
-                      {categoryExpenses.map((cat) => {
-                        const percent = totalExpense > 0 ? ((cat.sum / totalExpense) * 100).toFixed(0) : 0;
-                        return (
-                          <div key={cat.key} className="flex items-center justify-between text-[11px]">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-                              <span className="text-gray-300 truncate max-w-[90px]">{cat.label}</span>
-                            </div>
-                            <span className="font-bold text-rose-400">~{percent}%</span>
-                          </div>
-                        );
-                      })}
+                    <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-[#2F6F5E] h-full rounded-full transition-all duration-500"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-[#63695F]">
+                        สะสมแล้ว <strong className="text-[#1B211E]">{formatMoney(g.current)}</strong> / {formatMoney(g.target)} ({percent}%)
+                      </span>
+                      <button
+                        onClick={() => setGoalToDeposit(g)}
+                        className="bg-[#2F6F5E] text-white px-3 py-1 rounded-lg text-[10px] font-bold shadow-sm"
+                      >
+                        + เติมเงิน
+                      </button>
                     </div>
                   </div>
-                )}
-              </div>
+                );
+              })
+            )}
+          </div>
+        </div>
 
-              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-800 text-xs">
-                <div><span className="text-gray-400">↗ รายรับ </span><span className="font-bold text-emerald-400">{formatMoney(totalIncome)}</span></div>
-                <div><span className="text-gray-400">↘ รายจ่าย </span><span className="font-bold text-rose-400">{formatMoney(totalExpense)}</span></div>
-                <div><span className="text-gray-400">ธนาคาร </span><span className="font-bold text-gray-200">{formatMoney(calcBankTotal)} บ.</span></div>
-                <div><span className="text-gray-400">เงินสด </span><span className="font-bold text-gray-200">{formatMoney(calcCashTotal)} บ.</span></div>
-              </div>
+        {/* 📌 หนี้สินและรายการเบิก */}
+        <div className="bg-white rounded-3xl p-5 mb-6 border border-[#E4E1D6] shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <span>📌</span> หนี้สินและรายการเบิก
+            </h3>
+            <button
+              onClick={() => setActiveModal("addDebt")}
+              className="bg-[#2F6F5E] text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm"
+            >
+              + เพิ่มรายการ
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-100">
+              <div className="text-[10px] text-rose-600 font-bold mb-0.5">เจ้าหนี้</div>
+              <div className="text-xs font-extrabold text-rose-700">{formatMoney(totalCreditor)}</div>
             </div>
-
-            <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 flex flex-wrap gap-2 justify-center">
-              <button onClick={() => setActiveModal("add_tx")} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">➕ เพิ่มรายรับ/รายจ่าย</button>
-              <button onClick={() => setActiveModal("add_debt")} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">🤝 เพิ่มเจ้าหนี้/ลูกหนี้</button>
-              <button onClick={() => setActiveModal("add_goal")} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">🎯 เพิ่มเป้าหมายออม</button>
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
+              <div className="text-[10px] text-emerald-600 font-bold mb-0.5">ลูกหนี้</div>
+              <div className="text-xs font-extrabold text-emerald-700">{formatMoney(totalDebtor)}</div>
+            </div>
+            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-100">
+              <div className="text-[10px] text-amber-600 font-bold mb-0.5">รอเบิก</div>
+              <div className="text-xs font-extrabold text-amber-700">{formatMoney(totalReimburse)}</div>
             </div>
           </div>
 
-          <div className="lg:col-span-7 space-y-4">
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">สรุป เจ้าหนี้ / ลูกหนี้ / รายการเบิก</h2>
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="bg-rose-50 p-3 rounded-2xl border border-rose-100">
-                  <p className="text-rose-600 font-medium text-[11px]">เจ้าหนี้ (เราติด)</p>
-                  <p className="text-base font-extrabold text-rose-700 mt-1">{formatMoney(totalCreditor)} บ.</p>
+          <div className="space-y-2">
+            {debts.length === 0 ? (
+              <div className="text-center py-4 text-xs text-[#63695F]">ยังไม่มีรายการหนี้สินหรือรายการเบิก</div>
+            ) : (
+              debts.map((d) => (
+                <div key={d.id} className="p-3 rounded-xl bg-[#F3F2ED] flex justify-between items-center text-xs">
+                  <div>
+                    <div className="font-bold flex items-center gap-2">
+                      <span>{d.person}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
+                          d.type === "creditor"
+                            ? "bg-rose-100 text-rose-700"
+                            : d.type === "debtor"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {d.type === "creditor" ? "เจ้าหนี้" : d.type === "debtor" ? "ลูกหนี้" : "รอเบิก"}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-[#63695F]">{d.note || "-"}</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-xs">{formatMoney(d.amount)}</span>
+                    <button
+                      onClick={() => setItemToDelete({ type: "debt", id: d.id })}
+                      className="text-gray-400 hover:text-red-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
-                <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
-                  <p className="text-emerald-600 font-medium text-[11px]">ลูกหนี้ (ใครติดเรา)</p>
-                  <p className="text-base font-extrabold text-emerald-700 mt-1">{formatMoney(totalDebtor)} บ.</p>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100">
-                  <p className="text-blue-600 font-medium text-[11px]">รอเบิกคืน</p>
-                  <p className="text-base font-extrabold text-blue-700 mt-1">{formatMoney(totalReimburse)} บ.</p>
-                </div>
-              </div>
-            </div>
+              ))
+            )}
+          </div>
+        </div>
 
-            {/* นำเข้าสลิปทีละ 1 รูป */}
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน (เลือกทีละ 1 รูปไม่ใช่เลือกทีละหลายคน)</h2>
+        {/* 📊 กราฟสรุปสัดส่วนรายจ่าย */}
+        <div className="bg-white rounded-3xl p-5 mb-6 border border-[#E4E1D6] shadow-sm">
+          <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
+            <span>📊</span> สัดส่วนค่าใช้จ่ายตามหมวดหมู่
+          </h3>
+          {totalExpense === 0 ? (
+            <div className="text-center py-8 text-xs text-[#63695F]">ยังไม่มีข้อมูลรายจ่ายสำหรับแสดงกราฟ</div>
+          ) : (
+            <div className="flex flex-col items-center gap-5">
               <div
-                onClick={() => !scanning && fileInputRef.current?.click()}
-                className={`border-2 border-dashed border-gray-200 rounded-2xl p-5 text-center transition cursor-pointer space-y-1 ${
-                  scanning ? "bg-gray-100 opacity-60 cursor-not-allowed" : "bg-gray-50 hover:bg-gray-100"
-                }`}
+                className="w-36 h-36 rounded-full shadow-inner relative"
+                style={{ background: `conic-gradient(${generatePieChartGradient()})` }}
               >
-                <div className="text-2xl">🖼️</div>
-                <p className="text-xs font-bold text-gray-700">คลิกเพื่อเลือกรูปสลิป (ทีละ 1 รูปไม่ใช่เลือกทีหลายๆคน)</p>
-                <p className="text-[11px] text-gray-400">ระบบจะสแกนและให้เลือกหมวดหมู่ก่อนบันทึก</p>
-                <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleSingleFileUpload} disabled={scanning} />
+                <div className="absolute inset-6 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
+                  <span className="text-[10px] text-[#63695F]">รายจ่ายรวม</span>
+                  <span className="text-xs font-extrabold">{formatMoney(totalExpense)}</span>
+                </div>
               </div>
-              {scanning && <p className="text-xs text-center font-bold text-[#8C6D23] animate-pulse">⏳ กำลังสแกนสลิป กรุณารอสักครู่...</p>}
-              {scanMessage && <p className="text-xs text-center font-bold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">{scanMessage}</p>}
+
+              <div className="w-full grid grid-cols-2 gap-2">
+                {categoryExpenses.map((cat) => (
+                  <div key={cat.key} className="flex items-center justify-between p-2 rounded-xl bg-[#F3F2ED] text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                      <span className="font-medium truncate max-w-[90px]">{cat.label}</span>
+                    </div>
+                    <span className="font-bold">{formatMoney(cat.sum)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
-
-function AdminChatRoom({ targetUserId }) {
-  const [messages, setMessages] = useState([]);
-  const scrollRef = useRef(null);
-
-  useEffect(() => {
-    const fetchRoom = async () => {
-      try {
-        const res = await fetch(`https://budget-planner-app-b6620-default-rtdb.asia-southeast1.firebasedatabase.app/chats/${targetUserId}.json`);
-        const data = await res.json();
-        if (data) setMessages(Object.values(data));
-        else setMessages([]);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchRoom();
-    const interval = setInterval(fetchRoom, 2500);
-    return () => clearInterval(interval);
-  }, [targetUserId]);
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages]);
-
-  return (
-    <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50">
-      {messages.length === 0 ? (
-        <p className="text-xs text-gray-400 text-center py-10">ยังไม่มีข้อความสนทนาในห้องนี้</p>
-      ) : (
-        messages.map((msg) => {
-          const isAdmin = msg.sender === "admin";
-          return (
-            <div key={msg.id} className={`flex flex-col ${isAdmin ? "items-end" : "items-start"}`}>
-              <span className="text-[10px] text-gray-400 px-1 mb-0.5">{msg.senderName} • {msg.time}</span>
-              <div className={`p-3 rounded-2xl text-xs max-w-[80%] leading-relaxed shadow-sm whitespace-pre-wrap ${
-                isAdmin ? "bg-[#8C6D23] text-white rounded-tr-sm" : "bg-white text-gray-800 border border-gray-200 rounded-tl-sm"
-              }`}>
-                {msg.text}
-              </div>
-            </div>
-          );
-        })
-      )}
-    </div>
-  );
-}
-
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
