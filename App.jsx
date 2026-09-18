@@ -111,13 +111,8 @@ export default function App() {
     return id;
   });
 
-  const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "");
+  const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "Rawin");
   const [userAvatar, setUserAvatar] = useState(() => localStorage.getItem("bp_userAvatar") || "");
-
-  const [onboardingStep, setOnboardingStep] = useState(() => {
-    return !localStorage.getItem("bp_userName") ? 1 : null;
-  });
-  const [inputName, setInputName] = useState("");
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null); 
@@ -134,24 +129,6 @@ export default function App() {
   const [slipCategory, setSlipCategory] = useState("food");
   const [slipCustomNote, setSlipCustomNote] = useState("");
   const [slipTime, setSlipTime] = useState("");
-
-  const [budgetSets, setBudgetSets] = useState(() => {
-    const saved = localStorage.getItem("bp_budgetSets");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {}
-    }
-    return [];
-  });
-  const [activeBudgetSetId, setActiveBudgetSetId] = useState(() => {
-    return localStorage.getItem("bp_activeBudgetSetId") || "";
-  });
-  
-  const [newSetName, setNewSetName] = useState("");
-  const [newSetTotal, setNewSetTotal] = useState("");
-  const [setAllocations, setSetAllocations] = useState({});
 
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -181,11 +158,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [accountAdjustments, setAccountAdjustments] = useState(() => {
-    const saved = localStorage.getItem("bp_accountAdjustments");
-    return saved ? JSON.parse(saved) : { bank: 0, cash: 0 };
-  });
-
   const [type, setType] = useState("expense");
   const [account, setAccount] = useState("bank");
   const [amount, setAmount] = useState("");
@@ -205,9 +177,6 @@ export default function App() {
   const [debtPerson, setDebtPerson] = useState("");
   const [debtDueDate, setDebtDueDate] = useState("");
 
-  const [bankRealInput, setBankRealInput] = useState("");
-  const [cashRealInput, setCashRealInput] = useState("");
-
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState("");
   const fileInputRef = useRef(null);
@@ -222,8 +191,7 @@ export default function App() {
       goalToDeposit ||
       goalToEdit ||
       pendingSlip ||
-      itemToDelete ||
-      onboardingStep;
+      itemToDelete;
 
     if (isAnyModalOpen) {
       document.body.style.overflow = "hidden";
@@ -242,20 +210,17 @@ export default function App() {
     goalToEdit,
     pendingSlip,
     itemToDelete,
-    onboardingStep,
   ]);
 
-  const calcBankTotal =
-    transactions.reduce(
-      (acc, t) => (t.account === "bank" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    ) + accountAdjustments.bank;
+  const calcBankTotal = transactions.reduce(
+    (acc, t) => (t.account === "bank" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
+    0
+  );
 
-  const calcCashTotal =
-    transactions.reduce(
-      (acc, t) => (t.account === "cash" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    ) + accountAdjustments.cash;
+  const calcCashTotal = transactions.reduce(
+    (acc, t) => (t.account === "cash" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
+    0
+  );
 
   const totalExpense = transactions
     .filter((t) => t.type === "expense")
@@ -291,9 +256,6 @@ export default function App() {
   useEffect(() => localStorage.setItem("bp_transactions", JSON.stringify(transactions)), [transactions]);
   useEffect(() => localStorage.setItem("bp_savingsGoals", JSON.stringify(savingsGoals)), [savingsGoals]);
   useEffect(() => localStorage.setItem("bp_debts", JSON.stringify(debts)), [debts]);
-  useEffect(() => localStorage.setItem("bp_accountAdjustments", JSON.stringify(accountAdjustments)), [accountAdjustments]);
-  useEffect(() => localStorage.setItem("bp_budgetSets", JSON.stringify(budgetSets)), [budgetSets]);
-  useEffect(() => localStorage.setItem("bp_activeBudgetSetId", activeBudgetSetId), [activeBudgetSetId]);
 
   // ส่ง Heartbeat สถานะออนไลน์
   useEffect(() => {
@@ -302,7 +264,7 @@ export default function App() {
       try {
         const payload = {
           deviceId,
-          userName: userName || "ผู้ใช้ทั่วไป",
+          userName: userName || "Rawin",
           avatar: userAvatar || "",
           balance: totalBalance,
           lastActive: Date.now(),
@@ -322,7 +284,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [userName, userAvatar, totalBalance, deviceId]);
 
-  // ฟังก์ชันแปลงเวลาใช้งานล่าสุดให้แม่นยำ ไม่เป็น Invalid Date
   const formatUserStatus = (lastActiveTimestamp) => {
     if (!lastActiveTimestamp) return { text: "ออฟไลน์", isOnline: false };
     const timeNum = Number(lastActiveTimestamp);
@@ -340,7 +301,6 @@ export default function App() {
     }
   };
 
-  // ดึงข้อมูลคลาวด์ (รายชื่อผู้ใช้ออนไลน์ และรายงานปัญหา)
   useEffect(() => {
     const fetchCloudData = async () => {
       try {
@@ -554,7 +514,7 @@ export default function App() {
     const reportObj = {
       id: Date.now(),
       deviceId,
-      userName: userName || "ผู้ใช้ทั่วไป",
+      userName: userName || "Rawin",
       text: reportText.trim(),
       time: new Date().toLocaleString("th-TH"),
     };
@@ -597,9 +557,6 @@ export default function App() {
       setSavingsGoals(savingsGoals.filter((g) => g.id !== id));
     } else if (itemType === "debt") {
       setDebts(debts.filter((d) => d.id !== id));
-    } else if (itemType === "budgetSet") {
-      setBudgetSets(budgetSets.filter((s) => s.id !== id));
-      if (activeBudgetSetId === id) setActiveBudgetSetId("");
     }
 
     setItemToDelete(null);
@@ -607,49 +564,6 @@ export default function App() {
 
   return (
     <div className="bg-[#F3F2ED] min-h-screen text-[#1B211E] font-sans pb-28 selection:bg-[#2F6F5E] selection:text-white">
-      {/* 🚀 Onboarding Wizard สำหรับผู้ใช้ใหม่ */}
-      {onboardingStep && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl border border-[#E4E1D6]">
-            <div className="w-16 h-16 bg-[#2F6F5E]/10 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
-              👋
-            </div>
-            <h2 className="text-xl font-bold mb-2">ยินดีต้อนรับสู่ Budget Planner</h2>
-            <p className="text-sm text-[#63695F] mb-6">
-              แอปพลิเคชันจดบันทึกรายรับ-รายจ่าย สแกนสลิปอัจฉริยะ และวางแผนการเงินส่วนตัว
-            </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!inputName.trim()) return;
-                setUserName(inputName.trim());
-                setOnboardingStep(null);
-              }}
-              className="space-y-4 text-left"
-            >
-              <div>
-                <label className="block text-xs font-bold text-[#63695F] mb-1">ชื่อเล่นของคุณ</label>
-                <input
-                  type="text"
-                  placeholder="เช่น คุณการ์ฟิลด์"
-                  value={inputName}
-                  onChange={(e) => setInputName(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-[#E4E1D6] focus:outline-none focus:border-[#2F6F5E] text-sm"
-                  required
-                  autoFocus
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-[#1B211E] text-white py-3 rounded-xl font-bold text-sm shadow-md hover:bg-black transition"
-              >
-                เริ่มใช้งานกันเลย 🚀
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* 🔔 Modal ยืนยันการลบรายการ */}
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -670,81 +584,6 @@ export default function App() {
               >
                 ลบข้อมูล
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ⚙️ Modal ปรับปรุงยอดเงินจริง */}
-      {activeModal === "adjustAccount" && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-[#E4E1D6]">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-bold">🛠️ ปรับปรุงยอดเงินบัญชี</h3>
-              <button
-                onClick={() => setActiveModal(null)}
-                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-            <p className="text-xs text-[#63695F] mb-4">
-              หากยอดเงินในแอปไม่ตรงกับยอดในบัญชีจริง สามารถระบุส่วนต่างเพื่อปรับยอดให้ตรงกันได้ทันที
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#63695F] mb-1">
-                  ยอดธนาคารจริง (ปัจจุบันในแอป: {formatMoney(calcBankTotal)})
-                </label>
-                <input
-                  type="number"
-                  placeholder="ระบุยอดเงินจริง"
-                  value={bankRealInput}
-                  onChange={(e) => setBankRealInput(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
-                />
-                <button
-                  onClick={() => {
-                    const real = parseFloat(bankRealInput);
-                    if (isNaN(real)) return;
-                    const currentWithoutAdj = calcBankTotal - accountAdjustments.bank;
-                    const diff = real - currentWithoutAdj;
-                    setAccountAdjustments({ ...accountAdjustments, bank: diff });
-                    setBankRealInput("");
-                    alert("ปรับยอดธนาคารสำเร็จ!");
-                  }}
-                  className="mt-2 w-full bg-[#2F6F5E] text-white py-2 rounded-xl text-xs font-bold"
-                >
-                  บันทึกยอดธนาคาร
-                </button>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#63695F] mb-1">
-                  ยอดเงินสดจริง (ปัจจุบันในแอป: {formatMoney(calcCashTotal)})
-                </label>
-                <input
-                  type="number"
-                  placeholder="ระบุยอดเงินสดจริง"
-                  value={cashRealInput}
-                  onChange={(e) => setCashRealInput(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-[#E4E1D6] text-sm focus:outline-none focus:border-[#2F6F5E]"
-                />
-                <button
-                  onClick={() => {
-                    const real = parseFloat(cashRealInput);
-                    if (isNaN(real)) return;
-                    const currentWithoutAdj = calcCashTotal - accountAdjustments.cash;
-                    const diff = real - currentWithoutAdj;
-                    setAccountAdjustments({ ...accountAdjustments, cash: diff });
-                    setCashRealInput("");
-                    alert("ปรับยอดเงินสดสำเร็จ!");
-                  }}
-                  className="mt-2 w-full bg-[#2F6F5E] text-white py-2 rounded-xl text-xs font-bold"
-                >
-                  บันทึกยอดเงินสด
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -1036,118 +875,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 💳 Modal วางแผนการเงิน / จัดสรรงบเป็นเซ็ต */}
-      {activeModal === "budgetPlanner" && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full h-[85vh] flex flex-col shadow-2xl border border-[#E4E1D6] overflow-hidden">
-            <div className="bg-[#1B211E] text-white p-4 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-sm">💳 วางแผนการเงิน / จัดสรรงบเป็นเซ็ต</h3>
-                <p className="text-[10px] text-[#C7CBC2]">สร้างเซ็ตงบประมาณประจำเดือน (เช่น Set 1, Set 2)</p>
-              </div>
-              <button
-                onClick={() => setActiveModal(null)}
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-[#F3F2ED]">
-              <div className="bg-white p-4 rounded-xl border border-[#E4E1D6] shadow-sm">
-                <h4 className="text-xs font-bold mb-3 text-[#1B211E]">➕ สร้างเซ็ตงบประมาณใหม่</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#63695F] mb-1">ชื่อเซ็ตงบ</label>
-                    <input
-                      type="text"
-                      placeholder="เช่น งบเดือนนี้, งบเงินเดือน"
-                      value={newSetName}
-                      onChange={(e) => setNewSetName(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#63695F] mb-1">ยอดเงินรวมของเซ็ตนี้ (บาท)</label>
-                    <input
-                      type="number"
-                      placeholder="0.00"
-                      value={newSetTotal}
-                      onChange={(e) => setNewSetTotal(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-[#E4E1D6] text-xs focus:outline-none focus:border-[#2F6F5E]"
-                    />
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (!newSetName.trim() || !newSetTotal) return;
-                      const newSet = {
-                        id: Date.now().toString(),
-                        name: newSetName.trim(),
-                        total: parseFloat(newSetTotal),
-                        allocations: { ...setAllocations },
-                      };
-                      setBudgetSets([...budgetSets, newSet]);
-                      if (!activeBudgetSetId) setActiveBudgetSetId(newSet.id);
-                      setNewSetName("");
-                      setNewSetTotal("");
-                      setSetAllocations({});
-                      alert("สร้างเซ็ตงบประมาณสำเร็จ!");
-                    }}
-                    className="w-full bg-[#2F6F5E] text-white py-2.5 rounded-xl text-xs font-bold"
-                  >
-                    บันทึกเซ็ตงบประมาณ
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-[#1B211E]">📋 เซ็ตงบประมาณของคุณ</h4>
-                {budgetSets.length === 0 ? (
-                  <div className="text-center py-6 text-xs text-[#63695F] bg-white rounded-xl border border-[#E4E1D6]">
-                    ยังไม่มีเซ็ตงบประมาณ
-                  </div>
-                ) : (
-                  budgetSets.map((set) => {
-                    const isActive = activeBudgetSetId === set.id;
-                    return (
-                      <div
-                        key={set.id}
-                        className={`p-4 rounded-xl border ${
-                          isActive ? "border-[#2F6F5E] bg-[#2F6F5E]/5" : "border-[#E4E1D6] bg-white"
-                        } shadow-sm`}
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="font-bold text-xs">{set.name}</div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setActiveBudgetSetId(isActive ? "" : set.id)}
-                              className={`px-3 py-1 rounded-lg text-[10px] font-bold ${
-                                isActive ? "bg-[#2F6F5E] text-white" : "bg-gray-100 text-gray-700"
-                              }`}
-                            >
-                              {isActive ? "ใช้งานอยู่" : "เลือกใช้"}
-                            </button>
-                            <button
-                              onClick={() => setItemToDelete({ type: "budgetSet", id: set.id })}
-                              className="text-gray-400 hover:text-red-600 text-xs font-bold p-1"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                        <div className="text-xs font-bold text-[#2F6F5E] mb-1">
-                          งบรวม: {formatMoney(set.total)} บาท
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 🛡️ Modal แอดมินล็อกอิน */}
       {showAdminLogin && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -1241,7 +968,7 @@ export default function App() {
                   {userAvatar ? (
                     <img src={userAvatar} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
-                    userName.charAt(0).toUpperCase() || "U"
+                    userName.charAt(0).toUpperCase() || "R"
                   )}
                 </div>
                 <input
@@ -1261,7 +988,7 @@ export default function App() {
                   }}
                 />
                 <div>
-                  <div className="font-bold text-sm">{userName || "ผู้ใช้งาน"}</div>
+                  <div className="font-bold text-sm">{userName || "Rawin"}</div>
                   <div className="text-[10px] text-[#63695F]">ID: {deviceId.slice(0, 8)}</div>
                 </div>
               </div>
@@ -1286,24 +1013,6 @@ export default function App() {
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
-                  setActiveModal("budgetPlanner");
-                }}
-                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
-              >
-                <span>💳</span> วางแผนการเงิน / จัดสรรงบเป็นเซ็ต
-              </button>
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  setActiveModal("adjustAccount");
-                }}
-                className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
-              >
-                <span>🛠️</span> ปรับปรุงยอดเงินบัญชี
-              </button>
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
                   setShowReportModal(true);
                 }}
                 className="w-full p-3 rounded-xl bg-[#F3F2ED] hover:bg-[#E4E1D6] transition flex items-center gap-3 text-xs font-bold text-left"
@@ -1322,7 +1031,7 @@ export default function App() {
             </div>
 
             <div className="pt-4 border-t border-[#E4E1D6] text-center text-[10px] text-[#63695F]">
-              Budget Planner v2.6 · ปลอดภัยและใช้งานง่าย
+              Budget Planner v2.7 · สะอาด รวดเร็ว ปลอดภัย
             </div>
           </div>
         </div>
@@ -1346,7 +1055,7 @@ export default function App() {
             </div>
 
             <div className="flex-1 p-5 overflow-y-auto space-y-6 bg-[#F3F2ED]">
-              {/* รายชื่อผู้ใช้ออนไลน์ พร้อมสถานะล่าสุด (แก้ปัญหา Invalid Date แล้ว) */}
+              {/* รายชื่อผู้ใช้ออนไลน์ พร้อมสถานะล่าสุด */}
               <div className="bg-white p-4 rounded-xl border border-[#E4E1D6] shadow-sm">
                 <h4 className="text-xs font-bold mb-3 text-[#1B211E]">🟢 ผู้ใช้งานทั้งหมดในระบบ ({onlineUsers.length})</h4>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -1362,11 +1071,11 @@ export default function App() {
                             {u.avatar ? (
                               <img src={u.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
                             ) : (
-                              (u.userName || "U").charAt(0).toUpperCase()
+                              (u.userName || "R").charAt(0).toUpperCase()
                             )}
                           </div>
                           <div>
-                            <div className="font-bold">{u.userName || "ผู้ใช้ทั่วไป"}</div>
+                            <div className="font-bold">{u.userName || "Rawin"}</div>
                             <div className="text-[10px] text-[#63695F]">
                               ยอดเงิน: {formatMoney(u.balance)} บาท · <span className={status.isOnline ? "text-emerald-600 font-bold" : "text-gray-500"}>{status.text}</span>
                             </div>
@@ -1414,12 +1123,12 @@ export default function App() {
               {userAvatar ? (
                 <img src={userAvatar} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
-                userName.charAt(0).toUpperCase() || "U"
+                userName.charAt(0).toUpperCase() || "R"
               )}
             </div>
             <div>
               <div className="text-xs text-[#63695F]">สวัสดีครับ 👋</div>
-              <div className="font-bold text-base">{userName || "ผู้ใช้งาน"}</div>
+              <div className="font-bold text-base">{userName || "Rawin"}</div>
             </div>
           </div>
           <button
@@ -1448,7 +1157,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* 🎯 เป้าหมายการออม (นำกลับมาไว้หน้าหลักแบบขนาดย่อ) */}
+        {/* 🎯 เป้าหมายการออม (แบบขนาดย่อหน้าหลัก) */}
         <div className="bg-white rounded-3xl p-5 mb-6 border border-[#E4E1D6] shadow-sm">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-sm font-bold flex items-center gap-2">
