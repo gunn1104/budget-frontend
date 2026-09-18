@@ -1,30 +1,26 @@
-const { useState, useEffect, useRef } = React;
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBo04M6atVIJe2wc7prBS6N6y...", 
-  authDomain: "budget-planner-app-b6620.firebaseapp.com",
-  databaseURL: "https://budget-planner-app-b6620-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "budget-planner-app-b6620",
-  storageBucket: "budget-planner-app-b6620.appspot.com",
-  messagingSenderId: "104816758240",
-  appId: "1:104816758240:web:3ee5fc818719c"
-};
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Plus, Pencil, Trash2, Check, X, Target, ArrowUpRight, ArrowDownRight,
+  ImagePlus, Loader2, Users, Scale, PlusCircle, Shield, PiggyBank,
+  ChevronLeft, ChevronRight,
+} from "lucide-react";
 
 const EXPENSE_CATEGORIES = [
-  { key: "food", label: "อาหาร/เครื่องดื่ม", color: "#EF4444" },
-  { key: "transport", label: "เดินทาง/น้ำมัน", color: "#F59E0B" },
-  { key: "shopping", label: "ช้อปปิ้ง", color: "#EC4899" },
-  { key: "bills", label: "ค่าน้ำ/ค่าไฟ/เน็ต", color: "#3B82F6" },
-  { key: "entertainment", label: "บันเทิง/เกม", color: "#8B5CF6" },
-  { key: "health", label: "สุขภาพ/ยา", color: "#10B981" },
-  { key: "other_exp", label: "อื่นๆ", color: "#6B7280" },
+  { key: "food", label: "อาหาร", color: "#A6303B" },
+  { key: "transport", label: "เดินทาง", color: "#2F6F5E" },
+  { key: "housing", label: "ที่พัก", color: "#4A5A70" },
+  { key: "entertainment", label: "บันเทิง", color: "#B08830" },
+  { key: "shopping", label: "ช้อปปิ้ง", color: "#7A4A6B" },
+  { key: "health", label: "สุขภาพ", color: "#3F7A4E" },
+  { key: "education", label: "การศึกษา", color: "#6B5B3E" },
+  { key: "other_expense", label: "อื่นๆ", color: "#8A8578" },
 ];
 
 const INCOME_CATEGORIES = [
-  { key: "salary", label: "เงินเดือน/ค่าจ้าง", color: "#10B981" },
-  { key: "business", label: "ธุรกิจส่วนตัว/งานเสริม", color: "#059669" },
-  { key: "gift", label: "โบนัส/ของขวัญ", color: "#34D399" },
-  { key: "other_inc", label: "รายรับอื่นๆ", color: "#6EE7B7" },
+  { key: "salary", label: "เงินเดือน", color: "#2F6F5E" },
+  { key: "business", label: "ธุรกิจ", color: "#2F6F5E" },
+  { key: "gift", label: "ของขวัญ", color: "#2F6F5E" },
+  { key: "other_income", label: "อื่นๆ", color: "#2F6F5E" },
 ];
 
 const ALL_CATEGORIES = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
@@ -33,9 +29,19 @@ const ACCOUNTS = [
   { key: "bank", label: "ธนาคาร" },
   { key: "cash", label: "เงินสด" },
 ];
-
 const ACCOUNT_LABEL = Object.fromEntries(ACCOUNTS.map((a) => [a.key, a.label]));
+
+const TUTORIAL_STEPS = [
+  { title: "ยินดีต้อนรับ", body: "แอปนี้ช่วยบันทึกรายรับ-รายจ่าย ตั้งเป้าหมายการออม ติดตามหนี้สิน และวางแผนงบประมาณล่วงหน้า ใช้เวลาไม่ถึงนาทีมาดูกันว่าแต่ละส่วนทำอะไรได้บ้าง" },
+  { title: "ยอดคงเหลือแบบสด", body: "การ์ดด้านบนสุดแสดงยอดคงเหลือรวม แยกเป็นยอดในธนาคารและเงินสด อัปเดตทันทีทุกครั้งที่เพิ่มหรือแก้ไขรายการ" },
+  { title: "เพิ่มรายการและนำเข้าจากสลิป", body: "กรอกรายรับ-รายจ่ายเองในฟอร์ม \"เพิ่มรายการ\" หรืออัปโหลดรูปสลิปโอนเงินให้ AI อ่านยอดให้อัตโนมัติ เลือกได้หลายรูปพร้อมกัน แล้วตรวจสอบก่อนกดยืนยัน" },
+  { title: "เป้าหมายการออมและงบประมาณ", body: "เพิ่มเป้าหมายการออมได้หลายอัน กดฝาก/ถอนเพื่ออัปเดตความคืบหน้า และตั้ง \"เซ็ตงบประมาณ\" รายเดือนเพื่อให้ระบบคำนวณงบต่อวันให้ล่วงหน้า" },
+  { title: "หนี้สินและการปรับยอด", body: "บันทึกเงินที่ติดหนี้คนอื่นหรือรอเบิกคืน พร้อมวันครบกำหนด ถ้ายอดในระบบไม่ตรงกับยอดจริงในกระเป๋า ใช้ปุ่ม \"ปรับยอดให้ตรงกับบัญชีจริง\" ได้ทันที" },
+  { title: "โปรไฟล์และการใช้ร่วมกัน", body: "ตั้งชื่อและรูปโปรไฟล์ได้ในหน้าโปรไฟล์ และเลือกเปิดโหมด \"ใช้ร่วมกัน\" ถ้าต้องการให้คนอื่นเห็นข้อมูลชุดเดียวกัน (ไม่มีการล็อกอินด้วยอีเมลจริง เป็นเพียงชื่อที่พิมพ์เอง)" },
+];
+
 const API_BASE_URL = "https://budget-backend-o7fq.onrender.com";
+const FIREBASE_DB_URL = "https://budget-planner-app-b6620-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 function categoryInfo(key) {
   return ALL_CATEGORIES.find((c) => c.key === key) || { label: key, color: "#8A8578" };
@@ -43,65 +49,96 @@ function categoryInfo(key) {
 
 function formatMoney(n) {
   const num = Number(n) || 0;
-  return num.toLocaleString("th-TH", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
+  return num.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function todayStr() {
-  return new Date().toISOString().split("T")[0];
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
 }
 
 function formatDateThai(iso) {
   try {
     const d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString("th-TH", {
-      day: "numeric",
-      month: "short",
-      year: "2-digit",
-    });
+    return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
   } catch {
     return iso;
   }
 }
 
-function resizeImage(file, maxDim = 1024) {
+function resizeImage(file, maxDim) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        let { width, height } = img;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height >= width && height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
         }
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        resolve({
-          base64Data: dataUrl.split(",")[1],
-          mediaType: "image/jpeg",
-        });
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
       };
       img.onerror = reject;
-      img.src = e.target.result;
+      img.src = reader.result;
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
 
-function App() {
+function budgetSetStats(s) {
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const dayOfMonth = now.getDate();
+  const daysLeft = Math.max(daysInMonth - dayOfMonth + 1, 1);
+  const dailyPlanned = s.monthlyAmount / daysInMonth;
+  const remaining = s.monthlyAmount - (Number(s.spentThisMonth) || 0);
+  const dailyRemaining = remaining / daysLeft;
+  return { daysInMonth, daysLeft, dailyPlanned, remaining, dailyRemaining };
+}
+
+const CONSENT_KEY = "budget-planner-consent-v1";
+const TUTORIAL_KEY = "budget-planner-tutorial-v1";
+const PROFILE_KEY = "budget-planner-profile-v1";
+const SCOPE_KEY = "budget-planner-scope-v2";
+const DATA_KEY_PRIVATE = "budget-planner-data-v4";
+const DATA_KEY_SHARED = "budget-planner-data-shared-v4";
+
+export default function BudgetPlanner() {
+  const sessionStartRef = useRef(Date.now());
+
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [consentModalOpen, setConsentModalOpen] = useState(false);
+
+  const [tutorialSeen, setTutorialSeen] = useState(true);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+
+  const [profile, setProfile] = useState({ name: "", avatar: null });
+  const profileFirstLoad = useRef(true);
+  const avatarInputRef = useRef(null);
+
+  const [showAdminView, setShowAdminView] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [activeAnnouncement, setActiveAnnouncement] = useState(null);
+  const [canCloseAnnouncement, setCanCloseAnnouncement] = useState(false);
+  const [announcementText, setAnnouncementText] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
+  const chatScrollRef = useRef(null);
+
   const [deviceId] = useState(() => {
     let id = localStorage.getItem("bp_deviceId");
     if (!id) {
@@ -111,259 +148,142 @@ function App() {
     return id;
   });
 
-  // Profile State
-  const [userName, setUserName] = useState(() => localStorage.getItem("bp_userName") || "");
-  const [userAvatar, setUserAvatar] = useState(() => localStorage.getItem("bp_userAvatar") || "");
+  const [dataScope, setDataScope] = useState("private");
+  const [transactions, setTransactions] = useState([]);
+  const [goals, setGoals] = useState([]);
+  const [debts, setDebts] = useState([]);
+  const [budgetSets, setBudgetSets] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const firstLoad = useRef(true);
 
-  // Onboarding Wizard State
-  const [onboardingStep, setOnboardingStep] = useState(() => {
-    return !localStorage.getItem("bp_userName") ? 1 : null;
-  });
-  const [inputName, setInputName] = useState("");
+  const [formType, setFormType] = useState("expense");
+  const [formAccount, setFormAccount] = useState("bank");
+  const [formAmount, setFormAmount] = useState("");
+  const [formCategory, setFormCategory] = useState(EXPENSE_CATEGORIES[0].key);
+  const [formNote, setFormNote] = useState("");
+  const [formDate, setFormDate] = useState(todayStr());
 
-  // Tutorial Tour State
-  const [tutorialStep, setTutorialStep] = useState(0);
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
 
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [activeModal, setActiveModal] = useState(null); 
-  
-  const [goalToDeposit, setGoalToDeposit] = useState(null);
-  const [depositAmount, setDepositAmount] = useState("");
+  const [goalDraft, setGoalDraft] = useState(null);
+  const [editingGoalId, setEditingGoalId] = useState(null);
+  const [addingGoal, setAddingGoal] = useState(false);
+  const [contributionDrafts, setContributionDrafts] = useState({});
 
-  const [goalToEdit, setGoalToEdit] = useState(null);
-  const [editGoalName, setEditGoalName] = useState("");
-  const [editGoalTarget, setEditGoalTarget] = useState("");
-  const [editGoalCurrent, setEditGoalCurrent] = useState("");
+  const [reconcileDraft, setReconcileDraft] = useState({ bank: "", cash: "" });
 
-  // Pending Slip State
-  const [pendingSlip, setPendingSlip] = useState(null);
-  const [slipCategory, setSlipCategory] = useState("food");
-  const [slipCustomNote, setSlipCustomNote] = useState("");
-  const [slipTime, setSlipTime] = useState("");
+  const [pendingSlips, setPendingSlips] = useState([]);
+  const slipInputRef = useRef(null);
 
-  // Chat State
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState("");
-  const [adminSelectedUserChat, setAdminSelectedUserChat] = useState(null);
-  const [adminChatInput, setAdminChatInput] = useState("");
-  const chatScrollRef = useRef(null);
+  const [debtForm, setDebtForm] = useState({ kind: "debt", description: "", amount: "", counterparty: "", dueDate: "" });
+  const [editingDebtId, setEditingDebtId] = useState(null);
+  const [debtEditDraft, setDebtEditDraft] = useState(null);
 
-  // Budget Sets State
-  const [budgetSets, setBudgetSets] = useState(() => {
-    const saved = localStorage.getItem("bp_budgetSets");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {}
-    }
-    return [];
-  });
-  const [activeBudgetSetId, setActiveBudgetSetId] = useState(() => {
-    return localStorage.getItem("bp_activeBudgetSetId") || "";
-  });
-  
-  const [newSetName, setNewSetName] = useState("");
-  const [newSetTotal, setNewSetTotal] = useState("");
-  const [setAllocations, setSetAllocations] = useState({});
-  const [setCustomLabels, setSetCustomLabels] = useState({});
+  const [budgetSetForm, setBudgetSetForm] = useState({ name: "", monthlyAmount: "" });
+  const [editingBudgetSetId, setEditingBudgetSetId] = useState(null);
+  const [budgetSetDraft, setBudgetSetDraft] = useState(null);
+  const [quickSpendDraft, setQuickSpendDraft] = useState({});
 
-  // Modals & Admin State
-  const [showPrivacyNotice, setShowPrivacyNotice] = useState(() => !localStorage.getItem("bp_privacyAccepted"));
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [adminUsername, setAdminUsername] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
-  const [adminLoginError, setAdminLoginError] = useState("");
+  async function loadData(scope) {
+    const key = scope === "shared" ? DATA_KEY_SHARED : DATA_KEY_PRIVATE;
+    const shared = scope === "shared";
+    try {
+      const result = await window.storage.get(key, shared);
+      if (result && result.value) {
+        const parsed = JSON.parse(result.value);
+        setTransactions(Array.isArray(parsed.transactions) ? parsed.transactions : []);
+        setGoals(Array.isArray(parsed.goals) ? parsed.goals : []);
+        setDebts(Array.isArray(parsed.debts) ? parsed.debts : []);
+        setBudgetSets(Array.isArray(parsed.budgetSets) ? parsed.budgetSets : []);
+        return;
+      }
+    } catch (e) {}
+    setTransactions([]);
+    setGoals([]);
+    setDebts([]);
+    setBudgetSets([]);
+  }
 
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [reportText, setReportText] = useState("");
-  const [reports, setReports] = useState([]);
-  const [onlineUsers, setOnlineUsers] = useState([]);
-
-  // Admin Broadcast Announcement State
-  const [announcementText, setAnnouncementText] = useState("");
-  const [activeAnnouncement, setActiveAnnouncement] = useState(null);
-  const [canCloseAnnouncement, setCanCloseAnnouncement] = useState(false);
-
-  const [itemToDelete, setItemToDelete] = useState(null);
-
-  // Core Data State
-  const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem("bp_transactions");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [savingsGoals, setSavingsGoals] = useState(() => {
-    const saved = localStorage.getItem("bp_savingsGoals");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [debts, setDebts] = useState(() => {
-    const saved = localStorage.getItem("bp_debts");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [accountAdjustments, setAccountAdjustments] = useState(() => {
-    const saved = localStorage.getItem("bp_accountAdjustments");
-    return saved ? JSON.parse(saved) : { bank: 0, cash: 0 };
-  });
-
-  const [type, setType] = useState("expense");
-  const [account, setAccount] = useState("bank");
-  const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState("food");
-  const [date, setDate] = useState(todayStr());
-  const [time, setTime] = useState("");
-  const [customCategoryNote, setCustomCategoryNote] = useState("");
-  const [note, setNote] = useState("");
-
-  const [goalName, setGoalName] = useState("");
-  const [goalTarget, setGoalTarget] = useState("");
-  const [goalCurrent, setGoalCurrent] = useState("");
-
-  const [debtType, setDebtType] = useState("creditor");
-  const [debtNote, setDebtNote] = useState("");
-  const [debtAmount, setDebtAmount] = useState("");
-  const [debtPerson, setDebtPerson] = useState("");
-  const [debtDueDate, setDebtDueDate] = useState("");
-
-  const [bankRealInput, setBankRealInput] = useState("");
-  const [cashRealInput, setCashRealInput] = useState("");
-
-  const [scanning, setScanning] = useState(false);
-  const [scanMessage, setScanMessage] = useState("");
-  const fileInputRef = useRef(null);
-  const avatarInputRef = useRef(null);
-
-  // Lock body scroll
-  useEffect(() => {
-    if (activeModal || isMenuOpen || showPrivacyNotice || showAdminLogin || showReportModal || goalToDeposit || goalToEdit || pendingSlip || itemToDelete || onboardingStep || tutorialStep > 0 || activeAnnouncement) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "auto";
-    }
-    return () => {
-      document.body.style.overflow = "auto";
-    };
-  }, [activeModal, isMenuOpen, showPrivacyNotice, showAdminLogin, showReportModal, goalToDeposit, goalToEdit, pendingSlip, itemToDelete, onboardingStep, tutorialStep, activeAnnouncement]);
-
-  const calcBankTotal =
-    transactions.reduce(
-      (acc, t) => (t.account === "bank" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    ) + accountAdjustments.bank;
-
-  const calcCashTotal =
-    transactions.reduce(
-      (acc, t) => (t.account === "cash" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    ) + accountAdjustments.cash;
-
-  const totalIncome = transactions
-    .filter((t) => t.type === "income")
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const totalExpense = transactions
-    .filter((t) => t.type === "expense")
-    .reduce((acc, t) => acc + t.amount, 0);
-
-  const totalBalance = calcBankTotal + calcCashTotal;
-
-  const totalCreditor = debts.filter((d) => d.type === "creditor").reduce((acc, d) => acc + d.amount, 0);
-  const totalDebtor = debts.filter((d) => d.type === "debtor").reduce((acc, d) => acc + d.amount, 0);
-  const totalReimburse = debts.filter((d) => d.type === "reimburse").reduce((acc, d) => acc + d.amount, 0);
-
-  const categoryExpenses = EXPENSE_CATEGORIES.map((cat) => {
-    const sum = transactions
-      .filter((t) => t.type === "expense" && t.category === cat.key)
-      .reduce((acc, t) => acc + t.amount, 0);
-    return { ...cat, sum };
-  }).filter((c) => c.sum > 0);
-
-  const generatePieChartGradient = () => {
-    if (totalExpense === 0 || categoryExpenses.length === 0) return "#333 0deg 360deg";
-    let cumulativePercent = 0;
-    const gradients = categoryExpenses.map((cat) => {
-      const percent = (cat.sum / totalExpense) * 100;
-      const start = cumulativePercent;
-      cumulativePercent += percent;
-      return `${cat.color} ${start * 3.6}deg ${cumulativePercent * 3.6}deg`;
+  const totalsByAccount = useMemo(() => {
+    const sums = { bank: { income: 0, expense: 0 }, cash: { income: 0, expense: 0 } };
+    transactions.forEach((t) => {
+      const acc = t.account === "cash" ? "cash" : "bank";
+      sums[acc][t.type] = (sums[acc][t.type] || 0) + Number(t.amount);
     });
-    return gradients.join(", ");
-  };
+    return sums;
+  }, [transactions]);
 
-  useEffect(() => localStorage.setItem("bp_userName", userName), [userName]);
-  useEffect(() => localStorage.setItem("bp_userAvatar", userAvatar), [userAvatar]);
-  useEffect(() => localStorage.setItem("bp_transactions", JSON.stringify(transactions)), [transactions]);
-  useEffect(() => localStorage.setItem("bp_savingsGoals", JSON.stringify(savingsGoals)), [savingsGoals]);
-  useEffect(() => localStorage.setItem("bp_debts", JSON.stringify(debts)), [debts]);
-  useEffect(() => localStorage.setItem("bp_accountAdjustments", JSON.stringify(accountAdjustments)), [accountAdjustments]);
-  useEffect(() => localStorage.setItem("bp_budgetSets", JSON.stringify(budgetSets)), [budgetSets]);
-  useEffect(() => localStorage.setItem("bp_activeBudgetSetId", activeBudgetSetId), [activeBudgetSetId]);
+  const bankBalance = totalsByAccount.bank.income - totalsByAccount.bank.expense;
+  const cashBalance = totalsByAccount.cash.income - totalsByAccount.cash.expense;
+  const totalIncome = totalsByAccount.bank.income + totalsByAccount.cash.income;
+  const totalExpense = totalsByAccount.bank.expense + totalsByAccount.cash.expense;
+  const balance = totalIncome - totalExpense;
 
-  // ส่ง Heartbeat สถานะออนไลน์
   useEffect(() => {
-    if (!userName) return;
+    (async () => {
+      let consent = false;
+      try {
+        const c = await window.storage.get(CONSENT_KEY, false);
+        consent = !!(c && c.value === "true");
+      } catch (e) {}
+      setConsentGiven(consent);
+      setConsentChecked(true);
+
+      let seenTutorial = false;
+      try {
+        const t = await window.storage.get(TUTORIAL_KEY, false);
+        seenTutorial = !!(t && t.value === "true");
+      } catch (e) {}
+      setTutorialSeen(seenTutorial);
+
+      try {
+        const p = await window.storage.get(PROFILE_KEY, false);
+        if (p && p.value) {
+          const parsedP = JSON.parse(p.value);
+          setProfile({ name: parsedP.name || "", avatar: parsedP.avatar || null });
+        }
+      } catch (e) {}
+
+      let scope = "private";
+      try {
+        const r = await window.storage.get(SCOPE_KEY, false);
+        if (r && r.value === "shared") scope = "shared";
+      } catch (e) {}
+      setDataScope(scope);
+      await loadData(scope);
+      setLoaded(true);
+    })();
+  }, []);
+
+  // Firebase Realtime Sync (Heartbeat, Announcement, Chat)
+  useEffect(() => {
+    if (!profile.name) return;
     const sendHeartbeat = async () => {
       try {
-        const payload = {
-          deviceId,
-          userName: userName || "ผู้ใช้ทั่วไป",
-          avatar: userAvatar || "",
-          balance: totalBalance,
-          lastActive: Date.now(),
-        };
-        await fetch(`${firebaseConfig.databaseURL}/users/${deviceId}.json`, {
+        await fetch(`${FIREBASE_DB_URL}/users/${deviceId}.json`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ deviceId, userName: profile.name, avatar: profile.avatar, balance, lastActive: Date.now() }),
         });
-      } catch (err) {
-        console.error("Firebase Heartbeat Error:", err);
-      }
+      } catch (err) {}
     };
-
     sendHeartbeat();
-    const interval = setInterval(sendHeartbeat, 10000);
+    const interval = setInterval(sendHeartbeat, 12000);
     return () => clearInterval(interval);
-  }, [userName, userAvatar, totalBalance, deviceId]);
+  }, [profile.name, profile.avatar, balance, deviceId]);
 
-  const formatUserStatus = (lastActiveTimestamp) => {
-    if (!lastActiveTimestamp) return { text: "ออฟไลน์", isOnline: false };
-    const diffSec = Math.floor((Date.now() - lastActiveTimestamp) / 1000);
-    if (diffSec < 25) {
-      return { text: "🟢 กำลังใช้งานอยู่", isOnline: true };
-    } else {
-      const dateObj = new Date(lastActiveTimestamp);
-      const timeStr = dateObj.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-      const dateStr = dateObj.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
-      return { text: `⚪ ใช้งานล่าสุดเมื่อ ${dateStr} เวลา ${timeStr}`, isOnline: false };
-    }
-  };
-
-  // ดึงข้อมูลคลาวด์และห้องแชท
   useEffect(() => {
     const fetchCloudData = async () => {
       try {
-        const userRes = await fetch(`${firebaseConfig.databaseURL}/users.json`);
+        const userRes = await fetch(`${FIREBASE_DB_URL}/users.json`);
         const userData = await userRes.json();
-        if (userData) {
-          const usersList = Object.entries(userData).map(([key, val]) => ({ id: key, ...val }));
-          setOnlineUsers(usersList);
-        } else {
-          setOnlineUsers([]);
-        }
+        setOnlineUsers(userData ? Object.entries(userData).map(([key, val]) => ({ id: key, ...val })) : []);
 
-        if (!isAdminLoggedIn) {
-          const reportRes = await fetch(`${firebaseConfig.databaseURL}/reports.json`);
-          const reportData = await reportRes.json();
-          if (reportData) setReports(Object.values(reportData).reverse());
-        }
-
-        const annRes = await fetch(`${firebaseConfig.databaseURL}/announcement.json`);
+        const annRes = await fetch(`${FIREBASE_DB_URL}/announcement.json`);
         const annData = await annRes.json();
-        if (annData && annData.text) {
+        if (annData && annData.text && annData.timestamp > sessionStartRef.current) {
           setActiveAnnouncement((prev) => {
             if (!prev || prev.id !== annData.id) {
               setCanCloseAnnouncement(false);
@@ -377,1181 +297,1189 @@ function App() {
         }
 
         if (deviceId) {
-          const chatRes = await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}.json`);
+          const chatRes = await fetch(`${FIREBASE_DB_URL}/chats/${deviceId}.json`);
           const chatData = await chatRes.json();
-          if (chatData) {
-            setChatMessages(Object.values(chatData));
-          } else {
-            setChatMessages([]);
-          }
+          setChatMessages(chatData ? Object.values(chatData) : []);
         }
-      } catch (err) {
-        console.error("Firebase Fetch Error:", err);
-      }
+      } catch (err) {}
     };
-
     fetchCloudData();
-    const interval = setInterval(fetchCloudData, 3000);
+    const interval = setInterval(fetchCloudData, 4000);
     return () => clearInterval(interval);
-  }, [deviceId, isAdminLoggedIn]);
+  }, [deviceId]);
 
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
-  }, [chatMessages, activeModal]);
+  }, [chatMessages, chatOpen]);
 
-  // 🤖 ระบบ AI บอทตอบอัตโนมัติอัจฉริยะ (Auto-Reply Bot)
+  const formatUserStatus = (lastActiveTimestamp) => {
+    const ts = Number(lastActiveTimestamp);
+    if (!ts || isNaN(ts)) return { text: "ออฟไลน์", isOnline: false };
+    const diffSec = Math.floor((Date.now() - ts) / 1000);
+    if (diffSec < 25 && diffSec >= 0) {
+      return { text: "🟢 กำลังใช้งานอยู่", isOnline: true };
+    } else {
+      const dateObj = new Date(ts);
+      if (isNaN(dateObj.getTime())) return { text: "⚪ ออฟไลน์", isOnline: false };
+      const timeStr = dateObj.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+      const dateStr = dateObj.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+      return { text: `⚪ ล่าสุด ${dateStr} ${timeStr}`, isOnline: false };
+    }
+  };
+
+  const handleSendAnnouncementFromAdmin = async (text) => {
+    const annPayload = { id: Date.now().toString(), text, time: new Date().toLocaleString("th-TH"), timestamp: Date.now() };
+    await fetch(`${FIREBASE_DB_URL}/announcement.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(annPayload),
+    });
+    alert("ส่งประกาศแจ้งเตือนเรียบร้อยแล้ว!");
+    setAnnouncementText("");
+  };
+
   const handleSendUserChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
     const userText = chatInput.trim();
     const msgId = Date.now().toString();
     const userMsg = {
-      id: msgId,
-      sender: "user",
-      senderName: userName || "ผู้ใช้",
-      text: userText,
-      time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+      id: msgId, sender: "user", senderName: profile.name || "ผู้ใช้",
+      text: userText, time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
     };
 
     try {
-      // 1. บันทึกข้อความผู้ใช้ลง Firebase
-      await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}/${msgId}.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userMsg),
+      await fetch(`${FIREBASE_DB_URL}/chats/${deviceId}/${msgId}.json`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(userMsg),
       });
       setChatMessages((prev) => [...prev, userMsg]);
       setChatInput("");
 
-      // 2. วิเคราะห์คำถามและให้ AI บอทตอบอัตโนมัติทันที
-      let botReplyText = "";
-      const lowerText = userText.toLowerCase();
+      const recentHistory = [...chatMessages, userMsg].slice(-10).map((m) => ({
+        role: m.sender === "user" ? "user" : "assistant",
+        content: m.text,
+      }));
 
-      if (lowerText.includes("ปัญหา") || lowerText.includes("พัง") || lowerText.includes("error") || lowerText.includes("ใช้ไม่ได้")) {
-        botReplyText = "🤖 AI ระบบช่วยเหลืออัตโนมัติ:\nขณะนี้แอดมินอาจยังไม่ว่างครับ หากระบบมีปัญหาหรือสลิปสแกนไม่ติด แนะนำให้ลองรีเซ็ตแอปหรือกดส่งรายงานปัญหาในเมนู 3 ขีดได้เลยครับ แอดมินจะรีบเข้ามาตรวจสอบให้เร็วที่สุด!";
-      } else if (lowerText.includes("วิธีใช้งาน") || lowerText.includes("ใช้ยังไง") || lowerText.includes("คู่มือ")) {
-        botReplyText = "🤖 AI แนะนำวิธีใช้งาน:\n1. บันทึกรายรับ-รายจ่ายกดที่ปุ่มเพิ่มข้อมูล\n2. สแกนสลิปโอนเงินได้ที่กล่องอัปโหลดหน้าแรก\n3. จัดสรรงบประมาณล่วงหน้าได้ในเมนู 'วางแผนการเงิน' ครับ";
-      } else if (lowerText.includes("สวัสดี") || lowerText.includes("hi") || lowerText.includes("hello")) {
-        botReplyText = `🤖 สวัสดีครับคุณ ${userName || "ผู้ใช้"}! มีเรื่องให้อุปกรณ์ช่วยดูแลหรือสอบถามแอดมินพิมพ์ไว้ได้เลยครับ ระบบ AI กำลังดูแลให้อยู่ครับ`;
-      } else {
-        botReplyText = "🤖 ระบบได้รับข้อความของคุณแล้วครับ ขณะนี้แอดมินตัวจริงยังไม่ว่างตอบกลับ AI ขอรับเรื่องไว้และจะแจ้งแอดมินให้ติดต่อกลับโดยเร็วนะครับ!";
-      }
-
-      // หน่วงเวลา 1 วินาทีให้ดูเป็นธรรมชาติเหมือนบอทกำลังพิมพ์
-      setTimeout(async () => {
-        const botMsgId = (Date.now() + 1).toString();
-        const botMsg = {
-          id: botMsgId,
-          sender: "admin",
-          senderName: "AI บอทอัตโนมัติ 🤖",
-          text: botReplyText,
-          time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
-        };
-
-        await fetch(`${firebaseConfig.databaseURL}/chats/${deviceId}/${botMsgId}.json`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(botMsg),
-        });
-        setChatMessages((prev) => [...prev, botMsg]);
-      }, 1000);
-
-    } catch (err) {
-      console.error(err);
-      alert("ไม่สามารถส่งข้อความได้");
-    }
-  };
-
-  const handleSendAdminChat = async (e) => {
-    e.preventDefault();
-    if (!adminChatInput.trim() || !adminSelectedUserChat) return;
-    const msgId = Date.now().toString();
-    const newMsg = {
-      id: msgId,
-      sender: "admin",
-      senderName: "ผู้ดูแลระบบ (Admin)",
-      text: adminChatInput.trim(),
-      time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/chats/${adminSelectedUserChat.id}/${msgId}.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newMsg),
+      const aiRes = await fetch(`${API_BASE_URL}/api/chat-assist`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userName: profile.name || "ผู้ใช้", history: recentHistory }),
       });
-      setAdminChatInput("");
-    } catch (err) {
-      console.error(err);
-    }
-  };
+      if (!aiRes.ok) throw new Error("chat-assist failed");
+      const { reply } = await aiRes.json();
 
-  const handleSendAnnouncement = async (e) => {
-    e.preventDefault();
-    if (!announcementText.trim()) return;
-    const annPayload = {
-      id: Date.now().toString(),
-      text: announcementText.trim(),
-      time: new Date().toLocaleString("th-TH"),
-    };
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/announcement.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(annPayload),
+      const botMsgId = (Date.now() + 1).toString();
+      const botMsg = {
+        id: botMsgId, sender: "admin", senderName: "AI ผู้ช่วย 🤖",
+        text: reply || "รับเรื่องไว้แล้วครับ แอดมินจะติดต่อกลับเร็วๆ นี้",
+        time: new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }),
+      };
+      await fetch(`${FIREBASE_DB_URL}/chats/${deviceId}/${botMsgId}.json`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(botMsg),
       });
-      setAnnouncementText("");
-      alert("ส่งประกาศแจ้งเตือนไปยังหน้าจอผู้ใช้ทุกคนเรียบร้อยแล้ว!");
-    } catch (err) {
-      console.error(err);
-      alert("ไม่สามารถส่งประกาศได้");
-    }
+      setChatMessages((prev) => [...prev, botMsg]);
+    } catch (err) {}
   };
 
-  const handleClearAnnouncement = async () => {
-    if (!confirm("ต้องการลบประกาศนี้ออกจากหน้าจอผู้ใช้ทั้งหมดใช่หรือไม่?")) return;
+  useEffect(() => {
+    if (consentChecked && consentGiven && !tutorialSeen && !consentModalOpen) {
+      setTutorialOpen(true);
+    }
+  }, [consentChecked, consentGiven, tutorialSeen, consentModalOpen]);
+
+  async function handleAcceptConsent() {
+    setConsentGiven(true);
+    setConsentModalOpen(false);
     try {
-      await fetch(`${firebaseConfig.databaseURL}/announcement.json`, {
-        method: "DELETE",
-      });
-      setActiveAnnouncement(null);
-      alert("ลบประกาศเรียบร้อยแล้ว");
-    } catch (err) {
-      console.error(err);
-    }
-  };
+      await window.storage.set(CONSENT_KEY, "true", false);
+    } catch (e) {}
+  }
 
-  const handleDeleteUser = async (targetDeviceId) => {
-    if (!confirm("คุณต้องการลบข้อมูลผู้ใช้งานคนนี้ออกจากระบบหลังบ้านใช่หรือไม่?")) return;
+  async function markTutorialSeen() {
+    setTutorialSeen(true);
+    setTutorialOpen(false);
     try {
-      await fetch(`${firebaseConfig.databaseURL}/users/${targetDeviceId}.json`, {
-        method: "DELETE",
-      });
-      setOnlineUsers((prev) => prev.filter((u) => u.id !== targetDeviceId));
-      alert("ลบผู้ใช้งานเรียบร้อยแล้ว");
-    } catch (err) {
-      console.error(err);
-      alert("ไม่สามารถลบผู้ใช้งานได้");
+      await window.storage.set(TUTORIAL_KEY, "true", false);
+    } catch (e) {}
+  }
+
+  function openTutorial() {
+    setTutorialStep(0);
+    setTutorialOpen(true);
+  }
+
+  useEffect(() => {
+    if (!consentChecked) return;
+    if (profileFirstLoad.current) {
+      profileFirstLoad.current = false;
+      return;
     }
-  };
+    (async () => {
+      try {
+        await window.storage.set(PROFILE_KEY, JSON.stringify(profile), false);
+      } catch (e) {}
+    })();
+  }, [profile, consentChecked]);
 
-  const handleResetMyAccount = async () => {
-    if (!confirm("⚠️ คำเตือน: คุณต้องการลบข้อมูลทั้งหมดและเริ่มใช้งานใหม่ใช่หรือไม่?")) return;
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/users/${deviceId}.json`, {
-        method: "DELETE",
-      });
-    } catch (err) {
-      console.error(err);
-    }
-    localStorage.clear();
-    window.location.reload();
-  };
-
-  const confirmDelete = () => {
-    if (!itemToDelete) return;
-    if (itemToDelete.type === "transaction") {
-      setTransactions((prev) => prev.filter((t) => t.id !== itemToDelete.id));
-    } else if (itemToDelete.type === "debt") {
-      setDebts((prev) => prev.filter((d) => d.id !== itemToDelete.id));
-    } else if (itemToDelete.type === "goal") {
-      setSavingsGoals((prev) => prev.filter((g) => g.id !== itemToDelete.id));
-    } else if (itemToDelete.type === "budgetSet") {
-      const remaining = budgetSets.filter((s) => s.id !== itemToDelete.id);
-      setBudgetSets(remaining);
-      if (activeBudgetSetId === itemToDelete.id && remaining.length > 0) {
-        setActiveBudgetSetId(remaining[0].id);
-      } else if (remaining.length === 0) {
-        setActiveBudgetSetId("");
-      }
-    }
-    setItemToDelete(null);
-  };
-
-  const handleDepositGoal = (e) => {
-    e.preventDefault();
-    if (!goalToDeposit || !depositAmount || Number(depositAmount) <= 0) return;
-    setSavingsGoals((prev) =>
-      prev.map((g) => (g.id === goalToDeposit.id ? { ...g, current: (g.current || 0) + Number(depositAmount) } : g))
-    );
-    setGoalToDeposit(null);
-    setDepositAmount("");
-  };
-
-  const handleUpdateGoal = (e) => {
-    e.preventDefault();
-    if (!goalToEdit || !editGoalName || !editGoalTarget || Number(editGoalTarget) <= 0) return;
-    setSavingsGoals((prev) =>
-      prev.map((g) =>
-        g.id === goalToEdit.id
-          ? { ...g, name: editGoalName.trim(), target: Number(editGoalTarget), current: Number(editGoalCurrent) || 0 }
-          : g
-      )
-    );
-    setGoalToEdit(null);
-    setEditGoalName("");
-    setEditGoalTarget("");
-    setEditGoalCurrent("");
-  };
-
-  const handleSaveNewBudgetSet = (e) => {
-    e.preventDefault();
-    if (!newSetName || !newSetTotal || Number(newSetTotal) <= 0) return;
-    const newId = Date.now().toString();
-    const newSet = {
-      id: newId,
-      name: newSetName.trim(),
-      totalBudget: Number(newSetTotal),
-      items: { ...setAllocations },
-      customLabels: { ...setCustomLabels },
-    };
-    setBudgetSets((prev) => [...prev, newSet]);
-    setActiveBudgetSetId(newId);
-    setNewSetName("");
-    setNewSetTotal("");
-    setSetAllocations({});
-    setSetCustomLabels({});
-    alert("บันทึกเซ็ตแผนการเงินเรียบร้อยแล้ว!");
-  };
-
-  const acceptPrivacy = () => {
-    localStorage.setItem("bp_privacyAccepted", "true");
-    setShowPrivacyNotice(false);
-  };
-
-  const handleAvatarChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setUserAvatar(ev.target.result);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleAdminLogin = (e) => {
-    e.preventDefault();
-    if (adminUsername.trim() === "Admin" && adminPassword.trim() === "27112547") {
-      setIsAdminLoggedIn(true);
-      setShowAdminLogin(false);
-      setAdminLoginError("");
-      setAdminUsername("");
-      setAdminPassword("");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      setAdminLoginError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
-    }
-  };
-
-  const handleSendReport = async (e) => {
-    e.preventDefault();
-    if (!reportText.trim()) return;
-    const reportPayload = {
-      id: Date.now().toString(),
-      userName: userName || "ผู้ใช้ทั่วไป",
-      text: reportText.trim(),
-      date: new Date().toLocaleString("th-TH"),
-    };
-    try {
-      await fetch(`${firebaseConfig.databaseURL}/reports/${reportPayload.id}.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reportPayload),
-      });
-      setReportText("");
-      setShowReportModal(false);
-      alert("ส่งรายงานปัญหาถึงผู้ดูแลระบบเรียบร้อยแล้ว");
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleSingleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
+  async function handleAvatarChange(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
     if (!file) return;
-
-    setScanning(true);
-    setScanMessage("กำลังอ่านข้อมูลสลิป...");
-
     try {
-      const { base64Data, mediaType } = await resizeImage(file);
-      const res = await fetch(`${API_BASE_URL}/api/parse-slip`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64Data, mediaType }),
-      });
+      const dataUrl = await resizeImage(file, 240);
+      setProfile((p) => ({ ...p, avatar: dataUrl }));
+    } catch (err) {}
+  }
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.amount && Number(data.amount) > 0) {
-          setPendingSlip({
-            amount: Number(data.amount),
-            date: data.date || todayStr(),
-            time: data.time || "",
-            note: data.note || "",
-          });
-          setSlipCategory("food");
-          setSlipCustomNote("");
-          setSlipTime(data.time || "");
-          setScanMessage("");
-        } else {
-          setScanMessage("อ่านสลิปสำเร็จ แต่ไม่พบยอดเงิน");
-        }
-      } else {
-        setScanMessage("ไม่สามารถประมวลผลสลิปนี้ได้");
-      }
-    } catch (err) {
-      console.error(err);
-      setScanMessage("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
-    } finally {
-      setScanning(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+  async function switchScope(newScope) {
+    setLoaded(false);
+    setDataScope(newScope);
+    try {
+      await window.storage.set(SCOPE_KEY, newScope, false);
+    } catch (e) {}
+    await loadData(newScope);
+    firstLoad.current = true;
+    setLoaded(true);
+  }
+
+  useEffect(() => {
+    if (!loaded) return;
+    if (firstLoad.current) {
+      firstLoad.current = false;
+      return;
     }
-  };
+    const key = dataScope === "shared" ? DATA_KEY_SHARED : DATA_KEY_PRIVATE;
+    const shared = dataScope === "shared";
+    (async () => {
+      try {
+        const res = await window.storage.set(key, JSON.stringify({ transactions, goals, debts, budgetSets }), shared);
+        setSaveError(!res);
+      } catch (e) {
+        setSaveError(true);
+      }
+    })();
+  }, [transactions, goals, debts, budgetSets, loaded, dataScope]);
 
-  const handleConfirmSlip = (e) => {
+  const categoryBreakdown = useMemo(() => {
+    const map = {};
+    transactions
+      .filter((t) => t.type === "expense")
+      .forEach((t) => {
+        map[t.category] = (map[t.category] || 0) + Number(t.amount);
+      });
+    const rows = Object.entries(map).map(([key, amount]) => ({ key, amount, ...categoryInfo(key) }));
+    rows.sort((a, b) => b.amount - a.amount);
+    return rows;
+  }, [transactions]);
+  const maxCategoryAmount = categoryBreakdown.length ? categoryBreakdown[0].amount : 0;
+
+  const sortedTransactions = useMemo(
+    () => [...transactions].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.id - a.id)),
+    [transactions]
+  );
+
+  const totalDebtUnpaid = useMemo(
+    () => debts.filter((d) => d.kind === "debt" && d.status === "unpaid").reduce((s, d) => s + Number(d.amount), 0),
+    [debts]
+  );
+  const totalClaimUnpaid = useMemo(
+    () => debts.filter((d) => d.kind === "claim" && d.status === "unpaid").reduce((s, d) => s + Number(d.amount), 0),
+    [debts]
+  );
+  const sortedDebts = useMemo(() => [...debts].sort((a, b) => b.id - a.id), [debts]);
+  const debtsByPerson = useMemo(() => {
+    const map = {};
+    debts
+      .filter((d) => d.status === "unpaid" && d.counterparty && d.counterparty.trim())
+      .forEach((d) => {
+        const key = d.counterparty.trim();
+        if (!map[key]) map[key] = { debt: 0, claim: 0 };
+        map[key][d.kind] += Number(d.amount);
+      });
+    return Object.entries(map).map(([name, v]) => ({ name, ...v }));
+  }, [debts]);
+
+  const combinedActivity = useMemo(() => {
+    const txItems = transactions.map((t) => ({
+      key: "t" + t.id, id: t.id,
+      label: (t.type === "income" ? "รายรับ" : "รายจ่าย") + " · " + categoryInfo(t.category).label,
+      amount: t.amount, addedBy: t.addedBy,
+    }));
+    const debtItems = debts.map((d) => ({
+      key: "d" + d.id, id: d.id,
+      label: (d.kind === "debt" ? "หนี้" : "เบิก") + " · " + d.description,
+      amount: d.amount, addedBy: d.addedBy,
+    }));
+    return [...txItems, ...debtItems].sort((a, b) => b.id - a.id).slice(0, 20);
+  }, [transactions, debts]);
+
+  const currentCategoryOptions = formType === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+
+  function handleTypeSwitch(type) {
+    setFormType(type);
+    setFormCategory(type === "expense" ? EXPENSE_CATEGORIES[0].key : INCOME_CATEGORIES[0].key);
+  }
+
+  function handleAdd(e) {
     e.preventDefault();
-    if (!pendingSlip) return;
-
+    const amt = parseFloat(formAmount);
+    if (!amt || amt <= 0) return;
     const newTx = {
-      id: Date.now().toString(),
-      type: "expense",
-      account: "bank",
-      amount: pendingSlip.amount,
-      category: slipCategory,
-      customCategoryNote: slipCategory === "other_exp" ? slipCustomNote.trim() : "",
-      date: pendingSlip.date,
-      time: slipTime.trim(),
-      note: pendingSlip.note || "นำเข้าจากสลิป",
+      id: Date.now(), type: formType, account: formAccount, amount: amt, category: formCategory,
+      note: formNote.trim(), date: formDate || todayStr(), addedBy: profile.name || "",
     };
-
     setTransactions((prev) => [newTx, ...prev]);
-    setPendingSlip(null);
-    setScanMessage(`บันทึกรายจ่าย ${formatMoney(pendingSlip.amount)} บาท เรียบร้อยแล้ว`);
-  };
+    setFormAmount("");
+    setFormNote("");
+  }
 
-  const handleAddTransaction = (e) => {
-    e.preventDefault();
-    if (!amount || Number(amount) <= 0) return;
+  function startEdit(tx) {
+    setEditingId(tx.id);
+    setEditDraft({ account: "bank", ...tx });
+  }
+  function saveEdit() {
+    const amt = parseFloat(editDraft.amount);
+    if (!amt || amt <= 0) return;
+    setTransactions((prev) => prev.map((t) => (t.id === editingId ? { ...editDraft, amount: amt } : t)));
+    setEditingId(null);
+    setEditDraft(null);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft(null);
+  }
+  function deleteTx(id) {
+    setTransactions((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  function startAddGoal() {
+    setAddingGoal(true);
+    setEditingGoalId(null);
+    setGoalDraft({ name: "", target: "", saved: "0" });
+  }
+  function startEditGoal(g) {
+    setEditingGoalId(g.id);
+    setAddingGoal(false);
+    setGoalDraft({ name: g.name, target: g.target, saved: g.saved });
+  }
+  function cancelGoalDraft() {
+    setAddingGoal(false);
+    setEditingGoalId(null);
+    setGoalDraft(null);
+  }
+  function saveGoalDraft() {
+    const target = parseFloat(goalDraft.target) || 0;
+    const saved = parseFloat(goalDraft.saved) || 0;
+    const name = goalDraft.name.trim() || "เป้าหมายการออม";
+    if (editingGoalId) {
+      setGoals((prev) => prev.map((g) => (g.id === editingGoalId ? { ...g, name, target, saved } : g)));
+    } else {
+      setGoals((prev) => [...prev, { id: Date.now(), name, target, saved, history: [] }]);
+    }
+    cancelGoalDraft();
+  }
+  function deleteGoal(id) {
+    setGoals((prev) => prev.filter((g) => g.id !== id));
+  }
+  function addGoalContribution(goalId, amountStr, type) {
+    const amt = parseFloat(amountStr);
+    if (!amt || amt <= 0) return;
+    setGoals((prev) =>
+      prev.map((g) => {
+        if (g.id !== goalId) return g;
+        const delta = type === "withdraw" ? -amt : amt;
+        const newSaved = Math.max(0, (Number(g.saved) || 0) + delta);
+        const entry = { id: Date.now(), amount: amt, type, date: todayStr() };
+        const history = [entry, ...(g.history || [])].slice(0, 8);
+        return { ...g, saved: newSaved, history };
+      })
+    );
+    setContributionDrafts((prev) => ({ ...prev, [goalId]: { ...(prev[goalId] || { type: "deposit" }), amount: "" } }));
+  }
+
+  function handleReconcile(acc) {
+    const actual = parseFloat(reconcileDraft[acc]);
+    if (isNaN(actual)) return;
+    const current = acc === "bank" ? bankBalance : cashBalance;
+    const diff = actual - current;
+    if (Math.abs(diff) >= 0.005) {
+      const newTx = {
+        id: Date.now(), type: diff > 0 ? "income" : "expense", account: acc, amount: Math.abs(diff),
+        category: diff > 0 ? "other_income" : "other_expense", note: "ปรับยอดให้ตรงกับยอดจริง",
+        date: todayStr(), addedBy: profile.name || "",
+      };
+      setTransactions((prev) => [newTx, ...prev]);
+    }
+    setReconcileDraft((prev) => ({ ...prev, [acc]: "" }));
+  }
+
+  function handleSlipFiles(fileList) {
+    const files = Array.from(fileList || []);
+    files.forEach((file) => {
+      const id = Date.now() + Math.random();
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result;
+        const base64Data = String(dataUrl).split(",")[1];
+        const mediaType = file.type || "image/jpeg";
+
+        setPendingSlips((prev) => [
+          { id, imageData: dataUrl, amount: "", date: todayStr(), note: "", type: "expense", category: EXPENSE_CATEGORIES[0].key, status: "reading" },
+          ...prev,
+        ]);
+
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/parse-slip`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ base64Data, mediaType }),
+          });
+          const parsed = await res.json();
+          setPendingSlips((prev) =>
+            prev.map((s) =>
+              s.id === id
+                ? {
+                    ...s,
+                    amount: parsed.amount != null ? String(parsed.amount) : "",
+                    date: parsed.date || todayStr(),
+                    note: parsed.note || "",
+                    status: parsed.amount != null ? "ready" : "manual",
+                  }
+                : s
+            )
+          );
+        } catch (e) {
+          setPendingSlips((prev) => prev.map((s) => (s.id === id ? { ...s, status: "manual" } : s)));
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  function updateSlip(id, patch) {
+    setPendingSlips((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+  function confirmSlip(id) {
+    const slip = pendingSlips.find((s) => s.id === id);
+    if (!slip) return;
+    const amt = parseFloat(slip.amount);
+    if (!amt || amt <= 0) return;
     const newTx = {
-      id: Date.now().toString(),
-      type,
-      account,
-      amount: Number(amount),
-      category,
-      customCategoryNote: category === "other_exp" ? customCategoryNote.trim() : "",
-      date,
-      time: time.trim(),
-      note,
+      id: Date.now(), type: slip.type, account: "bank", amount: amt, category: slip.category,
+      note: (slip.note || "").trim(), date: slip.date || todayStr(), addedBy: profile.name || "",
     };
     setTransactions((prev) => [newTx, ...prev]);
-    setAmount("");
-    setNote("");
-    setCustomCategoryNote("");
-    setTime("");
-    setActiveModal(null);
-  };
+    setPendingSlips((prev) => prev.filter((s) => s.id !== id));
+  }
+  function discardSlip(id) {
+    setPendingSlips((prev) => prev.filter((s) => s.id !== id));
+  }
 
-  const handleAddGoal = (e) => {
+  function handleAddDebt(e) {
     e.preventDefault();
-    if (!goalName || !goalTarget || Number(goalTarget) <= 0) return;
-    setSavingsGoals((prev) => [
-      ...prev,
-      { id: Date.now().toString(), name: goalName, target: Number(goalTarget), current: Number(goalCurrent) || 0 },
-    ]);
-    setGoalName("");
-    setGoalTarget("");
-    setGoalCurrent("");
-    setActiveModal(null);
-  };
+    const amt = parseFloat(debtForm.amount);
+    if (!amt || amt <= 0) return;
+    const newDebt = {
+      id: Date.now(), kind: debtForm.kind, description: debtForm.description.trim(), amount: amt,
+      counterparty: debtForm.counterparty.trim(), dueDate: debtForm.dueDate || "", status: "unpaid",
+      dateAdded: todayStr(), addedBy: profile.name || "",
+    };
+    setDebts((prev) => [newDebt, ...prev]);
+    setDebtForm({ kind: debtForm.kind, description: "", amount: "", counterparty: "", dueDate: "" });
+  }
+  function toggleDebtStatus(id) {
+    setDebts((prev) => prev.map((d) => (d.id === id ? { ...d, status: d.status === "paid" ? "unpaid" : "paid" } : d)));
+  }
+  function deleteDebt(id) {
+    setDebts((prev) => prev.filter((d) => d.id !== id));
+  }
+  function startEditDebt(d) {
+    setEditingDebtId(d.id);
+    setDebtEditDraft({ ...d });
+  }
+  function saveDebtEdit() {
+    const amt = parseFloat(debtEditDraft.amount);
+    if (!amt || amt <= 0) return;
+    setDebts((prev) => prev.map((d) => (d.id === editingDebtId ? { ...debtEditDraft, amount: amt } : d)));
+    setEditingDebtId(null);
+    setDebtEditDraft(null);
+  }
+  function cancelDebtEdit() {
+    setEditingDebtId(null);
+    setDebtEditDraft(null);
+  }
 
-  const handleAddDebt = (e) => {
+  function handleAddBudgetSet(e) {
     e.preventDefault();
-    if (!debtAmount || Number(debtAmount) <= 0) return;
-    setDebts((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        type: debtType,
-        note: debtNote,
-        amount: Number(debtAmount),
-        person: debtPerson,
-        dueDate: debtDueDate,
-      },
-    ]);
-    setDebtNote("");
-    setDebtAmount("");
-    setDebtPerson("");
-    setDebtDueDate("");
-    setActiveModal(null);
-  };
-
-  const handleAdjustBank = () => {
-    if (!bankRealInput) return;
-    const realVal = Number(bankRealInput);
-    const calculatedBank = transactions.reduce(
-      (acc, t) => (t.account === "bank" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    );
-    setAccountAdjustments((prev) => ({ ...prev, bank: realVal - calculatedBank }));
-    setBankRealInput("");
-  };
-
-  const handleAdjustCash = () => {
-    if (!cashRealInput) return;
-    const realVal = Number(cashRealInput);
-    const calculatedCash = transactions.reduce(
-      (acc, t) => (t.account === "cash" ? acc + (t.type === "income" ? t.amount : -t.amount) : acc),
-      0
-    );
-    setAccountAdjustments((prev) => ({ ...prev, cash: realVal - calculatedCash }));
-    setCashRealInput("");
-  };
-
-  const activeBudgetSet = budgetSets.find((s) => s.id === activeBudgetSetId) || budgetSets[0];
-  const totalAllocated = activeBudgetSet ? Object.values(activeBudgetSet.items).reduce((a, b) => a + Number(b), 0) : 0;
-  const remainingBudget = activeBudgetSet ? activeBudgetSet.totalBudget - totalAllocated : 0;
-
-  const newSetTotalAllocated = Object.values(setAllocations).reduce((a, b) => a + Number(b), 0);
-  const newSetRemaining = (Number(newSetTotal) || 0) - newSetTotalAllocated;
+    const amt = parseFloat(budgetSetForm.monthlyAmount);
+    if (!amt || amt <= 0 || !budgetSetForm.name.trim()) return;
+    setBudgetSets((prev) => [...prev, { id: Date.now(), name: budgetSetForm.name.trim(), monthlyAmount: amt, spentThisMonth: 0 }]);
+    setBudgetSetForm({ name: "", monthlyAmount: "" });
+  }
+  function startEditBudgetSet(s) {
+    setEditingBudgetSetId(s.id);
+    setBudgetSetDraft({ name: s.name, monthlyAmount: s.monthlyAmount });
+  }
+  function saveBudgetSetEdit() {
+    const amt = parseFloat(budgetSetDraft.monthlyAmount);
+    if (!amt || amt <= 0) return;
+    setBudgetSets((prev) => prev.map((s) => (s.id === editingBudgetSetId ? { ...s, name: budgetSetDraft.name.trim() || s.name, monthlyAmount: amt } : s)));
+    setEditingBudgetSetId(null);
+    setBudgetSetDraft(null);
+  }
+  function cancelBudgetSetEdit() {
+    setEditingBudgetSetId(null);
+    setBudgetSetDraft(null);
+  }
+  function deleteBudgetSet(id) {
+    setBudgetSets((prev) => prev.filter((s) => s.id !== id));
+  }
+  function quickSpend(id) {
+    const amt = parseFloat(quickSpendDraft[id]);
+    if (!amt || amt <= 0) return;
+    setBudgetSets((prev) => prev.map((s) => (s.id === id ? { ...s, spentThisMonth: (Number(s.spentThisMonth) || 0) + amt } : s)));
+    setQuickSpendDraft((prev) => ({ ...prev, [id]: "" }));
+  }
+  function resetBudgetSet(id) {
+    setBudgetSets((prev) => prev.map((s) => (s.id === id ? { ...s, spentThisMonth: 0 } : s)));
+  }
 
   return (
-    <div className="min-h-screen bg-[#F7F5EF] text-[#2C2C2C] font-sans pb-12 relative">
+    <div className="bp-root">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@500;600&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
 
-      {/* 🚨 แจ้งเตือนประกาศจาก Admin (เด้งขึ้นหน้าจอ บังคับค้าง 3 วินาที) */}
+        .bp-root {
+          --bg: #F3F2ED; --surface: #FFFFFF; --ink: #1B211E; --ink-soft: #63695F; --ink-faint: #9A9C90;
+          --line: #E4E1D6; --income: #2F6F5E; --income-bg: #E7F0EC; --expense: #A6303B; --expense-bg: #F7E9E8;
+          --gold: #B08830; --gold-bg: #F3ECDA; --radius: 14px;
+          font-family: 'Noto Sans Thai', sans-serif; background: var(--bg); color: var(--ink);
+          min-height: 100%; padding: 20px 14px 40px; box-sizing: border-box; max-width: 980px; margin: 0 auto;
+          position: relative;
+        }
+        .bp-root * { box-sizing: border-box; }
+
+        .bp-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+        .bp-title { font-family: 'Noto Serif Thai', serif; font-weight: 600; font-size: 20px; margin: 0; letter-spacing: 0.01em; }
+        .bp-header-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .bp-scope-btn {
+          display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface);
+          border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+          cursor: pointer; font-family: 'Noto Sans Thai', sans-serif; flex-shrink: 0; white-space: nowrap;
+        }
+        .bp-scope-btn.shared { color: var(--income); border-color: var(--income-bg); background: var(--income-bg); }
+        .bp-scope-note { font-size: 12px; color: var(--ink-soft); margin: 8px 0 0; line-height: 1.5; }
+        .bp-link-row { display: flex; gap: 16px; margin: 8px 0 16px; }
+        .bp-policy-link { border: none; background: none; color: var(--ink-faint); font-size: 11.5px; text-decoration: underline; cursor: pointer; padding: 0; font-family: 'Noto Sans Thai', sans-serif; }
+
+        .bp-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
+        .bp-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .bp-admin-card { border: 1.5px solid var(--gold); background: var(--gold-bg); }
+        .bp-admin-note { font-size: 12px; color: var(--ink-soft); line-height: 1.5; margin: 0 0 12px; }
+        .bp-admin-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+        .bp-admin-row:last-child { border-bottom: none; }
+
+        .bp-hero { background: var(--ink); color: #F3F2ED; border: none; box-shadow: 0 8px 24px -12px rgba(27, 33, 30, 0.45); }
+        .bp-hero-label { font-size: 13px; color: #C7CBC2; margin: 0 0 6px; }
+        .bp-hero-balance { font-family: 'Noto Serif Thai', serif; font-weight: 600; font-size: 36px; line-height: 1.1; margin: 0 0 14px; font-variant-numeric: tabular-nums; }
+        .bp-hero-balance small { font-family: 'Noto Sans Thai', sans-serif; font-size: 15px; font-weight: 400; color: #C7CBC2; margin-left: 6px; }
+        .bp-hero-row { display: flex; flex-wrap: wrap; gap: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.14); }
+        .bp-hero-stat { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #E4E5DF; }
+        .bp-hero-stat b { font-variant-numeric: tabular-nums; font-weight: 600; }
+        .bp-hero-stat.in b { color: #8FD3B8; }
+        .bp-hero-stat.out b { color: #E6A199; }
+        .bp-hero-accounts { display: flex; gap: 16px; margin-top: 10px; font-size: 12.5px; color: #C7CBC2; }
+        .bp-hero-accounts b { color: #F3F2ED; font-variant-numeric: tabular-nums; }
+
+        .bp-profile-row { display: flex; align-items: center; gap: 14px; }
+        .bp-avatar-wrap { position: relative; width: 56px; height: 56px; border-radius: 50%; cursor: pointer; flex-shrink: 0; }
+        .bp-avatar-img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 1px solid var(--line); }
+        .bp-avatar-placeholder { width: 56px; height: 56px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-family: 'Noto Serif Thai', serif; font-size: 20px; color: var(--ink-soft); text-transform: uppercase; }
+        .bp-avatar-edit-badge { position: absolute; bottom: -2px; right: -2px; background: var(--ink); color: #fff; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--surface); }
+
+        .bp-grid { display: block; }
+        @media (min-width: 760px) { .bp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; } }
+
+        .bp-section-title { font-size: 14px; font-weight: 600; margin: 0; color: var(--ink); }
+
+        .bp-goal-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+        .bp-goal-item:last-of-type { border-bottom: none; }
+        .bp-goal-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; gap: 8px; }
+        .bp-goal-name { font-size: 14px; font-weight: 600; }
+        .bp-goal-item-actions { display: flex; gap: 2px; flex-shrink: 0; }
+        .bp-goal-track { height: 10px; background: var(--gold-bg); border-radius: 999px; overflow: hidden; }
+        .bp-goal-fill { height: 100%; background: var(--gold); border-radius: 999px; transition: width 0.4s ease; }
+        .bp-goal-pct { margin: 8px 0 0; font-size: 12px; color: var(--ink-soft); }
+        .bp-goal-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 10px; }
+        .bp-goal-form input { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-family: 'Noto Sans Thai', sans-serif; font-size: 14px; background: var(--bg); width: 100%; }
+        .bp-goal-actions { display: flex; gap: 8px; margin-top: 2px; }
+        .bp-add-goal-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; border: 1px dashed var(--line); background: var(--bg); border-radius: 10px; padding: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; margin-top: 8px; font-family: 'Noto Sans Thai', sans-serif; }
+
+        .bp-contrib-row { display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+        .bp-contrib-type { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--ink-soft); cursor: pointer; font-family: 'Noto Sans Thai', sans-serif; }
+        .bp-contrib-type.active.deposit { background: var(--income-bg); color: var(--income); border-color: var(--income-bg); }
+        .bp-contrib-type.active.withdraw { background: var(--expense-bg); color: var(--expense); border-color: var(--expense-bg); }
+        .bp-contrib-row input { flex: 1; min-width: 90px; border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; font-family: 'Noto Sans Thai', sans-serif; }
+        .bp-contrib-add { border: none; background: var(--ink); color: #fff; border-radius: 7px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: 'Noto Sans Thai', sans-serif; }
+        .bp-goal-history { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .bp-goal-hist-item { font-size: 11px; color: var(--ink-soft); background: var(--bg); border-radius: 6px; padding: 3px 7px; }
+        .bp-goal-hist-item.withdraw { color: var(--expense); }
+        .bp-goal-hist-item.deposit { color: var(--income); }
+
+        .bp-budgetset-stats { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--ink-soft); margin: 8px 0 4px; }
+        .bp-budgetset-stats b { font-variant-numeric: tabular-nums; color: var(--ink); }
+
+        .bp-reconcile-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+        .bp-reconcile-row:last-child { border-bottom: none; }
+        .bp-reconcile-label { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
+        .bp-reconcile-current { font-size: 12px; color: var(--ink-soft); margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+        .bp-reconcile-input-row { display: flex; gap: 8px; }
+        .bp-reconcile-input-row input { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-family: 'Noto Sans Thai', sans-serif; font-size: 14px; font-variant-numeric: tabular-nums; }
+        .bp-reconcile-input-row button { border: none; background: var(--ink); color: #fff; border-radius: 8px; padding: 0 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Noto Sans Thai', sans-serif; }
+
+        .bp-type-toggle { display: flex; background: var(--bg); border-radius: 10px; padding: 3px; margin-bottom: 10px; }
+        .bp-type-btn { flex: 1; border: none; background: transparent; padding: 9px 0; border-radius: 8px; font-family: 'Noto Sans Thai', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--ink-soft); transition: background 0.15s, color 0.15s; }
+        .bp-type-btn.active.expense { background: var(--expense-bg); color: var(--expense); }
+        .bp-type-btn.active.income { background: var(--income-bg); color: var(--income); }
+
+        .bp-account-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+        .bp-account-btn { flex: 1; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 0; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--ink-soft); font-family: 'Noto Sans Thai', sans-serif; }
+        .bp-account-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+        .bp-form-grid { display: flex; flex-direction: column; gap: 10px; }
+        .bp-field-label { font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; display: block; }
+        .bp-input, .bp-select { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; font-family: 'Noto Sans Thai', sans-serif; font-size: 15px; background: var(--surface); color: var(--ink); }
+        .bp-input:focus, .bp-select:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+        .bp-amount-input { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
+        .bp-row-2 { display: flex; gap: 10px; }
+        .bp-row-2 > div { flex: 1; }
+
+        .bp-add-btn { margin-top: 4px; border: none; border-radius: 10px; padding: 12px; font-family: 'Noto Sans Thai', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; color: #fff; transition: opacity 0.15s; }
+        .bp-add-btn.expense { background: var(--expense); }
+        .bp-add-btn.income { background: var(--income); }
+        .bp-add-btn:hover { opacity: 0.9; }
+        .bp-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .bp-cat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .bp-cat-row:last-child { margin-bottom: 0; }
+        .bp-cat-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .bp-cat-label { font-size: 13px; width: 78px; flex-shrink: 0; }
+        .bp-cat-bar-track { flex: 1; height: 8px; background: var(--bg); border-radius: 999px; overflow: hidden; }
+        .bp-cat-bar-fill { height: 100%; border-radius: 999px; }
+        .bp-cat-amt { font-size: 12.5px; color: var(--ink-soft); width: 66px; text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+        .bp-empty { font-size: 13px; color: var(--ink-faint); padding: 6px 0; }
+
+        .bp-debt-stats { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+        .bp-debt-stat { flex: 1; min-width: 140px; border-radius: 10px; padding: 10px 12px; }
+        .bp-debt-stat.expense { background: var(--expense-bg); }
+        .bp-debt-stat.income { background: var(--income-bg); }
+        .bp-debt-stat span { display: block; font-size: 11.5px; color: var(--ink-soft); margin-bottom: 2px; }
+        .bp-debt-stat b { font-size: 16px; font-variant-numeric: tabular-nums; }
+        .bp-debt-stat.expense b { color: var(--expense); }
+        .bp-debt-stat.income b { color: var(--income); }
+        .bp-overdue-badge { margin-left: 6px; color: #fff; background: var(--expense); font-size: 10px; padding: 1px 6px; border-radius: 999px; }
+
+        .bp-tx-list { display: flex; flex-direction: column; }
+        @media (min-width: 760px) { .bp-tx-list.bp-tx-cols { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; } }
+        .bp-tx-item { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+        .bp-tx-item:last-child { border-bottom: none; }
+        .bp-tx-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .bp-tx-main { flex: 1; min-width: 0; }
+        .bp-tx-cat { font-size: 14px; font-weight: 600; }
+        .bp-tx-note { font-size: 12.5px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bp-tx-date { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
+        .bp-tx-amt { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; white-space: nowrap; }
+        .bp-tx-amt.income { color: var(--income); }
+        .bp-tx-amt.expense { color: var(--expense); }
+        .bp-tx-actions { display: flex; gap: 2px; flex-shrink: 0; }
+        .bp-icon-btn { border: none; background: none; cursor: pointer; padding: 6px; border-radius: 7px; color: var(--ink-faint); display: flex; align-items: center; justify-content: center; }
+        .bp-icon-btn:hover { background: var(--bg); color: var(--ink); }
+
+        .bp-edit-row { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 6px 0; }
+        .bp-edit-line { display: flex; gap: 8px; }
+        .bp-edit-line input, .bp-edit-line select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13.5px; font-family: 'Noto Sans Thai', sans-serif; flex: 1; min-width: 0; }
+        .bp-edit-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+        .bp-save-note { font-size: 11px; color: var(--ink-faint); text-align: center; margin-top: 4px; }
+
+        .bp-slip-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px 12px; border: 1.5px dashed var(--line); border-radius: 12px; cursor: pointer; text-align: center; background: var(--bg); transition: border-color 0.15s; }
+        .bp-slip-drop:hover { border-color: var(--ink-faint); }
+        .bp-slip-drop span.bp-slip-cta { font-size: 14px; font-weight: 600; color: var(--ink); }
+        .bp-slip-drop span.bp-slip-sub { font-size: 12px; color: var(--ink-soft); }
+        .bp-slip-hint { font-size: 11.5px; color: var(--ink-faint); margin: 10px 2px 0; line-height: 1.5; }
+
+        .bp-slip-card { display: flex; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+        .bp-slip-card:last-child { border-bottom: none; }
+        .bp-slip-thumb { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--line); }
+        .bp-slip-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+        .bp-slip-status { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); }
+        .bp-slip-fields { display: flex; flex-direction: column; gap: 6px; }
+        .bp-slip-line { display: flex; gap: 6px; }
+        .bp-slip-line input, .bp-slip-line select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13.5px; font-family: 'Noto Sans Thai', sans-serif; flex: 1; min-width: 0; }
+        .bp-slip-type-toggle { display: flex; gap: 6px; }
+        .bp-slip-type-btn { flex: 1; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 0; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--ink-soft); }
+        .bp-slip-type-btn.active.expense { background: var(--expense-bg); color: var(--expense); border-color: var(--expense-bg); }
+        .bp-slip-type-btn.active.income { background: var(--income-bg); color: var(--income); border-color: var(--income-bg); }
+        .bp-slip-actions { display: flex; gap: 6px; }
+        .bp-slip-confirm { flex: 1; border: none; background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 0; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; }
+        .bp-slip-confirm:disabled { opacity: 0.35; cursor: not-allowed; }
+        .bp-slip-discard { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--ink-soft); cursor: pointer; }
+        .bp-spin { animation: bp-spin 0.9s linear infinite; }
+        @keyframes bp-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .bp-modal-overlay { position: fixed; inset: 0; background: rgba(27,33,30,0.55); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+        .bp-modal-card { background: var(--surface); border-radius: 16px; padding: 22px; max-width: 420px; width: 100%; max-height: 85vh; overflow-y: auto; }
+        .bp-modal-title { font-family: 'Noto Serif Thai', serif; font-size: 18px; font-weight: 600; margin: 0 0 12px; }
+        .bp-modal-body { font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin-bottom: 16px; }
+        .bp-modal-body ul { padding-left: 18px; margin: 8px 0; }
+        .bp-modal-body li { margin-bottom: 4px; }
+        .bp-tutorial-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 16px; }
+        .bp-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); transition: all 0.2s; }
+        .bp-dot.active { background: var(--ink); width: 16px; border-radius: 3px; }
+        .bp-tutorial-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+      `}</style>
+
       {activeAnnouncement && (
-        <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center border-2 border-amber-500">
-            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              📢
-            </div>
-            <h3 className="text-base font-extrabold text-gray-900">ประกาศสำคัญจากผู้ดูแลระบบ</h3>
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-gray-800 font-medium whitespace-pre-wrap leading-relaxed text-left">
-              {activeAnnouncement.text}
-            </div>
-            <p className="text-[10px] text-gray-400">ส่งเมื่อ: {activeAnnouncement.time}</p>
-
+        <div className="bp-modal-overlay" style={{ zIndex: 300 }}>
+          <div className="bp-modal-card" style={{ border: "2px solid var(--gold)" }}>
+            <h3 className="bp-modal-title">📢 ประกาศสำคัญจากผู้ดูแลระบบ</h3>
+            <div className="bp-modal-body" style={{ background: "var(--gold-bg)", padding: 12, borderRadius: 10 }}>{activeAnnouncement.text}</div>
+            <p style={{ fontSize: 11, color: "var(--ink-faint)", marginBottom: 12 }}>ส่งเมื่อ: {activeAnnouncement.time}</p>
             {canCloseAnnouncement ? (
-              <button
-                onClick={() => setActiveAnnouncement(null)}
-                className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold shadow-md hover:bg-black transition flex items-center justify-center gap-2"
-              >
-                <span>✕ ปิดประกาศนี้</span>
-              </button>
+              <button className="bp-add-btn income" onClick={() => { localStorage.setItem("bp_closedAnnouncementId", activeAnnouncement.id); setActiveAnnouncement(null); }}>✕ ปิดประกาศนี้</button>
             ) : (
-              <div className="w-full bg-gray-200 text-gray-500 py-3 rounded-2xl text-xs font-bold cursor-not-allowed">
-                ⏳ กรุณารอสักครู่ (สามารถปิดได้ใน 3 วินาที)...
-              </div>
+              <div style={{ textAlign: "center", fontSize: 12, color: "var(--ink-soft)", padding: 10 }}>⏳ กรุณารอสักครู่ (สามารถปิดได้ใน 3 วินาที)...</div>
             )}
           </div>
         </div>
       )}
 
-      {/* 🚀 ONBOARDING WIZARD */}
-      {onboardingStep === 1 && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              👋
+      {(!consentGiven || consentModalOpen) && consentChecked && (
+        <div className="bp-modal-overlay">
+          <div className="bp-modal-card">
+            <h2 className="bp-modal-title">การเก็บข้อมูลของคุณ</h2>
+            <div className="bp-modal-body">
+              <p>แอปนี้จะเก็บข้อมูลต่อไปนี้ไว้ในระบบเก็บข้อมูลที่ผูกกับบัญชีของคุณ:</p>
+              <ul>
+                <li>รายรับ-รายจ่าย เป้าหมายการออม เซ็ตงบประมาณ และรายการหนี้สิน/รายการเบิกที่คุณกรอก</li>
+                <li>ชื่อโปรไฟล์และรูปโปรไฟล์ที่คุณอัปโหลด</li>
+                <li>รูปสลิปโอนเงินที่คุณเลือกอัปโหลด — รูปจะถูกส่งให้ AI อ่านยอดเงินหนึ่งครั้ง แล้วเก็บรูปย่อไว้ในระบบเดียวกันเพื่อดูย้อนหลังได้</li>
+              </ul>
+              <p>ถ้าคุณเปิดโหมด "ใช้ร่วมกัน" ข้อมูลข้างต้นทั้งหมด รวมถึงชื่อโปรไฟล์ที่พิมพ์ไว้ จะมองเห็นได้กับทุกคนที่เปิดหน้านี้แล้วเลือกโหมดเดียวกัน</p>
+              <p>ระบบนี้ไม่มีการเข้าสู่ระบบด้วยอีเมลจริงและไม่มีรหัสผ่าน ชื่อโปรไฟล์เป็นเพียงข้อความที่คุณพิมพ์เอง ไม่ใช่การยืนยันตัวตน</p>
             </div>
-            <h3 className="text-lg font-extrabold text-gray-900">ยินดีต้อนรับสู่แอปงบประมาณ!</h3>
-            <p className="text-xs text-gray-500">กรุณาใส่ชื่อของคุณเพื่อเริ่มต้นใช้งานระบบ</p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (inputName.trim()) {
-                  setUserName(inputName.trim());
-                  setOnboardingStep(2);
-                }
-              }}
-              className="space-y-3 pt-2"
-            >
-              <input
-                type="text"
-                placeholder="ชื่อของคุณ (เช่น Gun)"
-                value={inputName}
-                onChange={(e) => setInputName(e.target.value)}
-                className="w-full px-4 py-3 border rounded-2xl text-sm bg-gray-50 font-semibold text-center"
-                required
-              />
-              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl text-xs font-bold shadow-md">
-                ถัดไป ➔
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {onboardingStep === 2 && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              📷
-            </div>
-            <h3 className="text-lg font-extrabold text-gray-900">ตั้งค่ารูปโปรไฟล์</h3>
-            <p className="text-xs text-gray-500">คุณสามารถอัปโหลดรูปภาพโปรไฟล์ของคุณได้ (หรือจะข้ามไปก่อนก็ได้)</p>
-            
-            <div className="py-2 flex justify-center">
-              <div
-                onClick={() => avatarInputRef.current?.click()}
-                className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 cursor-pointer overflow-hidden border-2 border-dashed border-gray-300 mx-auto shadow-inner"
-              >
-                {userAvatar ? <img src={userAvatar} className="w-full h-full object-cover" /> : <span className="text-2xl">➕</span>}
-                <input type="file" ref={avatarInputRef} accept="image/*" className="hidden" onChange={handleAvatarChange} />
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => setOnboardingStep(3)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">
-                ข้ามขั้นตอนนี้
-              </button>
-              <button onClick={() => setOnboardingStep(3)} className="flex-1 py-3 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold">
-                ถัดไป ➔
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {onboardingStep === 3 && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-              💡
-            </div>
-            <h3 className="text-lg font-extrabold text-gray-900">ต้องการแนะนำวิธีใช้งานไหม?</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              เรามีระบบทัวร์แนะนำ 6 ขั้นตอนครอบคลุมทุกฟังก์ชัน เพื่อให้คุณใช้งานได้คล่องทันที คุณต้องการรับชมไหมครับ?
-            </p>
-            <div className="space-y-2 pt-2">
-              <button
-                onClick={() => { setOnboardingStep(null); setTutorialStep(1); }}
-                className="w-full py-3 bg-[#1B5E20] text-white rounded-2xl text-xs font-bold shadow-md"
-              >
-                ✨ เริ่มทัวร์แนะนำการใช้งาน (6 ขั้นตอน)
-              </button>
-              <button onClick={() => setOnboardingStep(null)} className="w-full py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">
-                ข้ามไปหน้าหลักเลย
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🗺️ ระบบสอนใช้งานแบบทัวร์ 6 ขั้นตอน */}
-      {tutorialStep > 0 && (
-        <div className="fixed inset-0 bg-black/80 z-[250] flex flex-col items-center justify-center p-6 text-center text-white">
-          <div className="max-w-sm w-full space-y-4 bg-[#1E1E1E] p-6 rounded-3xl border border-gray-700 shadow-2xl text-left">
-            <div className="flex justify-between items-center text-xs text-gray-400 font-bold border-b border-gray-800 pb-2">
-              <span>คู่มือการใช้งานระบบ</span>
-              <span className="text-emerald-400">ขั้นตอนที่ {tutorialStep} จาก 6</span>
-            </div>
-
-            {tutorialStep === 1 && (
-              <div className="space-y-2">
-                <div className="text-2xl">👋</div>
-                <h4 className="text-sm font-bold text-emerald-400">1. ยินดีต้อนรับสู่แอปจัดการการเงิน</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">แอปนี้ออกแบบมาให้คุณจัดการเงิน เก็บออม และตรวจสอบสถานะทางการเงินได้อย่างรวดเร็วในหน้าจอเดียว!</p>
-              </div>
+            {!consentGiven ? (
+              <button className="bp-add-btn income" style={{ width: "100%" }} onClick={handleAcceptConsent}><Check size={15} /> ยอมรับและเข้าใช้งาน</button>
+            ) : (
+              <button className="bp-add-btn income" style={{ width: "100%" }} onClick={() => setConsentModalOpen(false)}>ปิด</button>
             )}
-            {tutorialStep === 2 && (
-              <div className="space-y-2">
-                <div className="text-2xl">📊</div>
-                <h4 className="text-sm font-bold text-emerald-400">2. ยอดเงินคงเหลือและกราฟวงกลม</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">การ์ดสีดำด้านซ้ายจะสรุปยอดเงินทั้งหมดของคุณ และมีกราฟวงกลมแสดงสัดส่วนรายจ่ายให้เห็นชัดเจน</p>
-              </div>
-            )}
-            {tutorialStep === 3 && (
-              <div className="space-y-2">
-                <div className="text-2xl">📸</div>
-                <h4 className="text-sm font-bold text-emerald-400">3. สแกนสลิปอัจฉริยะ</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">ไม่ต้องพิมพ์เอง! แค่เลือกรูปสลิปโอนเงิน ระบบจะดึงยอดเงินและวันที่ให้อัตโนมัติ พร้อมให้คุณเลือกหมวดหมู่</p>
-              </div>
-            )}
-            {tutorialStep === 4 && (
-              <div className="space-y-2">
-                <div className="text-2xl">➕</div>
-                <h4 className="text-sm font-bold text-emerald-400">4. บันทึกข้อมูล & เจ้าหนี้/ลูกหนี้</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">ใช้ปุ่มเพิ่มข้อมูลด้านล่างเพื่อจดรายรับ-รายจ่าย หรือบันทึกรายการเจ้าหนี้/ลูกหนี้</p>
-              </div>
-            )}
-            {tutorialStep === 5 && (
-              <div className="space-y-2">
-                <div className="text-2xl">🎯</div>
-                <h4 className="text-sm font-bold text-emerald-400">5. เป้าหมายการออม & วางแผนงบ</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">ตั้งเป้าหมายเก็บเงินและจัดสรรงบเป็นเซ็ตล่วงหน้า (เช่น Set 1, Set 2)</p>
-              </div>
-            )}
-            {tutorialStep === 6 && (
-              <div className="space-y-2">
-                <div className="text-2xl">☰</div>
-                <h4 className="text-sm font-bold text-emerald-400">6. เมนูเพิ่มเติม (3 ขีดซ้ายบน)</h4>
-                <p className="text-xs text-gray-300 leading-relaxed">กดปุ่ม 3 ขีดเพื่อเปิดดูประวัติย้อนหลัง, แชทคุยกับแอดมินหรือบอท AI, หรือปรับยอดเงินสด/ธนาคาร</p>
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-3">
-              {tutorialStep > 1 && (
-                <button onClick={() => setTutorialStep((prev) => prev - 1)} className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold">
-                  ← ย้อนกลับ
-                </button>
-              )}
-              {tutorialStep < 6 ? (
-                <button onClick={() => setTutorialStep((prev) => prev + 1)} className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold">
-                  ถัดไป ➔
-                </button>
-              ) : (
-                <button onClick={() => setTutorialStep(0)} className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold">
-                  🎉 จบการแนะนำ เริ่มใช้งานเลย
-                </button>
-              )}
-            </div>
-            <div className="text-center pt-1">
-              <button onClick={() => setTutorialStep(0)} className="text-[11px] text-gray-400 hover:text-white underline">
-                ข้ามการแนะนำ
-              </button>
-            </div>
           </div>
         </div>
       )}
 
-      {/* ☰ Side Menu Drawer */}
-      {isMenuOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex">
-          <div className="w-4/5 max-w-sm bg-white h-full p-6 space-y-4 shadow-2xl overflow-y-auto flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center border-b pb-4">
-                <h2 className="text-lg font-bold text-[#1E1E1E]">เมนูและเครื่องมือ</h2>
-                <button onClick={() => setIsMenuOpen(false)} className="text-gray-400 text-xl font-bold">✕</button>
-              </div>
-
-              <div className="space-y-2 pt-2">
-                <button
-                  onClick={() => { setActiveModal("chat_admin"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-blue-50 hover:bg-blue-100 rounded-2xl text-xs font-bold text-blue-800 border border-blue-200"
-                >
-                  <span>💬 แชทซัพพอร์ต (พร้อม AI บอทตอบอัตโนมัติ)</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("transactions"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-                >
-                  <span>📜 รายการประวัติทั้งหมด ({transactions.length})</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("budget_planner"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-emerald-50 hover:bg-emerald-100 rounded-2xl text-xs font-bold text-emerald-800 border border-emerald-200"
-                >
-                  <span>🗺️ วางแผนการเงิน / จัดสรรงบ (เซ็ต Set 1, 2...)</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("categories_detail"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-                >
-                  <span>📊 สรุปใช้จ่ายตามหมวดหมู่ (ละเอียดยิบ)</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("goals_detail"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-                >
-                  <span>🎯 เป้าหมายการออม (รายละเอียดทั้งหมด)</span>
-                  <span>➔</span>
-                </button>
-
-                <button
-                  onClick={() => { setActiveModal("adjust"); setIsMenuOpen(false); }}
-                  className="w-full flex justify-between items-center p-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-xs font-bold text-gray-800 border"
-                >
-                  <span>⚖️ ปรับยอดให้ตรงกับบัญชีจริง</span>
-                  <span>➔</span>
-                </button>
-              </div>
-
-              <div className="pt-4 border-t space-y-2">
-                <button onClick={() => { setTutorialStep(1); setIsMenuOpen(false); }} className="w-full text-left text-xs text-emerald-600 hover:text-emerald-800 py-2 font-semibold">
-                  💡 เปิดดูคู่มือแนะนำการใช้งาน (6 ขั้นตอน)
-                </button>
-                <button onClick={() => { setShowPrivacyNotice(true); setIsMenuOpen(false); }} className="w-full text-left text-xs text-gray-600 hover:text-black py-2">
-                  📜 นโยบายการเก็บข้อมูล
-                </button>
-                <button onClick={() => { setShowReportModal(true); setIsMenuOpen(false); }} className="w-full text-left text-xs text-rose-600 hover:text-rose-800 py-2 font-semibold">
-                  🚨 แจ้งปัญหาการใช้งาน
-                </button>
-              </div>
+      {tutorialOpen && consentGiven && !consentModalOpen && (
+        <div className="bp-modal-overlay">
+          <div className="bp-modal-card">
+            <h2 className="bp-modal-title">{TUTORIAL_STEPS[tutorialStep].title}</h2>
+            <div className="bp-modal-body"><p>{TUTORIAL_STEPS[tutorialStep].body}</p></div>
+            <div className="bp-tutorial-dots">
+              {TUTORIAL_STEPS.map((_, i) => (<span key={i} className={`bp-dot ${i === tutorialStep ? "active" : ""}`} />))}
             </div>
-
-            <div className="pt-4 border-t shrink-0">
-              <button
-                onClick={handleResetMyAccount}
-                className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-2xl text-xs font-bold border border-rose-200 transition flex items-center justify-center gap-2 shadow-sm"
-              >
-                <span>🗑️</span>
-                <span>รีเซ็ตบัญชีและลบข้อมูลทั้งหมด (เริ่มต้นใหม่)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 💬 Modal หน้าต่างแชท (มี AI บอทตอบอัตโนมัติ) */}
-      {activeModal === "chat_admin" && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl flex flex-col h-[80vh] overflow-hidden">
-            <div className="p-4 border-b flex justify-between items-center bg-[#1E1E1E] text-white shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold">
-                  🤖
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold">แชทซัพพอร์ต & AI บอทอัตโนมัติ</h3>
-                  <p className="text-[10px] text-blue-300">ตอบไว 24 ชม. เมื่อแอดมินไม่ว่าง</p>
-                </div>
-              </div>
-              <button onClick={() => setActiveModal(null)} className="text-gray-400 text-xl font-bold p-1">✕</button>
-            </div>
-
-            <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50">
-              {chatMessages.length === 0 ? (
-                <div className="text-center py-10 space-y-2">
-                  <div className="text-3xl">🤖💬</div>
-                  <p className="text-xs font-bold text-gray-700">สอบถามปัญหาหรือวิธีใช้งานได้เลย!</p>
-                  <p className="text-[11px] text-gray-400">พิมพ์คำว่า "วิธีใช้งาน" หรือ "ระบบมีปัญหา" เพื่อให้ AI ช่วยตอบได้ทันที</p>
-                </div>
-              ) : (
-                chatMessages.map((msg) => {
-                  const isAdmin = msg.sender === "admin";
-                  return (
-                    <div key={msg.id} className={`flex flex-col ${isAdmin ? "items-start" : "items-end"}`}>
-                      <span className="text-[10px] text-gray-400 px-1 mb-0.5">{msg.senderName} • {msg.time}</span>
-                      <div className={`p-3 rounded-2xl text-xs max-w-[80%] leading-relaxed shadow-sm whitespace-pre-wrap ${
-                        isAdmin ? "bg-white text-gray-800 border border-gray-200 rounded-tl-sm" : "bg-[#1E1E1E] text-white rounded-tr-sm"
-                      }`}>
-                        {msg.text}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <form onSubmit={handleSendUserChat} className="p-3 border-t bg-white flex gap-2 shrink-0">
-              <input
-                type="text"
-                placeholder="พิมพ์ข้อความสอบถาม (เช่น ระบบมีปัญหา, วิธีใช้งาน)..."
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                className="flex-1 px-4 py-2.5 border rounded-2xl text-xs bg-gray-50 font-medium"
-                required
-              />
-              <button type="submit" className="px-5 py-2.5 bg-[#1E1E1E] text-white rounded-2xl text-xs font-bold shadow-sm hover:bg-black transition">
-                ส่ง
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 💬 Modal แอดมินตอบแชทลูกค้าแต่ละห้อง */}
-      {adminSelectedUserChat && (
-        <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl flex flex-col h-[85vh] overflow-hidden">
-            <div className="p-4 border-b flex justify-between items-center bg-[#8C6D23] text-white shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-white text-[#8C6D23] flex items-center justify-center font-bold overflow-hidden border">
-                  {adminSelectedUserChat.avatar ? <img src={adminSelectedUserChat.avatar} className="w-full h-full object-cover" /> : adminSelectedUserChat.userName.charAt(0)}
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold">ห้องแชทกับ: {adminSelectedUserChat.userName}</h3>
-                  <p className="text-[10px] text-amber-200">Device ID: {adminSelectedUserChat.id}</p>
-                </div>
-              </div>
-              <button onClick={() => setAdminSelectedUserChat(null)} className="text-white text-xl font-bold p-1">✕</button>
-            </div>
-
-            <AdminChatRoom targetUserId={adminSelectedUserChat.id} />
-
-            <form onSubmit={handleSendAdminChat} className="p-3 border-t bg-white flex gap-2 shrink-0">
-              <input
-                type="text"
-                placeholder={`ตอบกลับ ${adminSelectedUserChat.userName}...`}
-                value={adminChatInput}
-                onChange={(e) => setAdminChatInput(e.target.value)}
-                className="flex-1 px-4 py-2.5 border rounded-2xl text-xs bg-gray-50 font-medium"
-                required
-              />
-              <button type="submit" className="px-5 py-2.5 bg-[#8C6D23] text-white rounded-2xl text-xs font-bold shadow-sm">
-                ส่งข้อความ
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modals ทั่วไปอื่นๆ */}
-      {itemToDelete && (
-        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-xl mx-auto">🗑️</div>
-            <h3 className="text-base font-bold text-gray-800">ยืนยันการลบเซ็ตแผนการเงินนี้?</h3>
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => setItemToDelete(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold">ยกเลิก</button>
-              <button onClick={confirmDelete} className="flex-1 py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold">ยืนยันลบ</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {pendingSlip && (
-        <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b pb-3">
-              <div>
-                <h3 className="text-base font-bold text-gray-900">🧾 ยืนยันรายการจากสลิป</h3>
-                <p className="text-xs text-emerald-600 font-bold">ยอดเงิน: {formatMoney(pendingSlip.amount)} บาท</p>
-              </div>
-              <button onClick={() => setPendingSlip(null)} className="text-gray-400 text-lg font-bold">✕</button>
-            </div>
-            <form onSubmit={handleConfirmSlip} className="space-y-3 text-xs">
-              <div>
-                <label className="text-gray-500 block mb-1">เลือกหมวดหมู่จริง</label>
-                <select value={slipCategory} onChange={(e) => setSlipCategory(e.target.value)} className="w-full px-3 py-2.5 border rounded-xl bg-gray-50 font-bold">
-                  {EXPENSE_CATEGORIES.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
-                </select>
-              </div>
-              {slipCategory === "other_exp" && (
-                <div>
-                  <label className="text-gray-500 block mb-1">ระบุรายละเอียด (ค่าอะไร?)</label>
-                  <input type="text" placeholder="เช่น ค่าซ่อมรถ" value={slipCustomNote} onChange={(e) => setSlipCustomNote(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" required />
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-gray-500 block mb-1">วันที่</label>
-                  <input type="date" value={pendingSlip.date} onChange={(e) => setPendingSlip({ ...pendingSlip, date: e.target.value })} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" />
-                </div>
-                <div>
-                  <label className="text-gray-500 block mb-1">เวลา</label>
-                  <input type="text" placeholder="14:30" value={slipTime} onChange={(e) => setSlipTime(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-medium" />
-                </div>
-              </div>
-              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-2xl font-bold">✓ บันทึกรายการนี้</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {goalToDeposit && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-xl space-y-4">
-            <div className="flex justify-between items-center border-b pb-2">
-              <h3 className="text-base font-bold text-gray-800">💰 เติมเงินออม: {goalToDeposit.name}</h3>
-              <button onClick={() => setGoalToDeposit(null)} className="text-gray-400 text-lg">✕</button>
-            </div>
-            <form onSubmit={handleDepositGoal} className="space-y-3">
-              <input type="number" placeholder="0.00" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="w-full px-3 py-2 border rounded-xl text-sm bg-gray-50" required />
-              <button type="submit" className="w-full bg-[#1B5E20] text-white py-2.5 rounded-xl text-xs font-bold">ยืนยันการเติมเงิน</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {goalToEdit && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl space-y-4">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-base font-bold text-gray-800">✏️ แก้ไขเป้าหมายการออม</h3>
-              <button onClick={() => setGoalToEdit(null)} className="text-gray-400 text-lg font-bold">✕</button>
-            </div>
-            <form onSubmit={handleUpdateGoal} className="space-y-3 text-xs">
-              <input type="text" value={editGoalName} onChange={(e) => setEditGoalName(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
-              <div className="grid grid-cols-2 gap-2">
-                <input type="number" value={editGoalTarget} onChange={(e) => setEditGoalTarget(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
-                <input type="number" value={editGoalCurrent} onChange={(e) => setEditGoalCurrent(e.target.value)} className="w-full px-3 py-2 border rounded-xl bg-gray-50 font-semibold" required />
-              </div>
-              <button type="submit" className="w-full bg-[#1E1E1E] text-white py-3 rounded-xl font-bold">💾 บันทึกการแก้ไข</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Main Container */}
-      <div className="max-w-5xl mx-auto px-4 pt-6 space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsMenuOpen(true)} className="p-2.5 bg-white rounded-2xl border border-gray-200 shadow-sm hover:bg-gray-50 text-xl">☰</button>
-            <h1 className="text-xl font-bold text-[#1E1E1E]">งบประมาณของฉัน</h1>
-          </div>
-          <button
-            onClick={() => (isAdminLoggedIn ? setIsAdminLoggedIn(false) : setShowAdminLogin(true))}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-              isAdminLoggedIn ? "bg-[#1E1E1E] text-white border-[#1E1E1E]" : "bg-white text-gray-600 border-gray-200"
-            }`}
-          >
-            🛡️ {isAdminLoggedIn ? "ออกจากระบบ Admin" : "ผู้ดูแลระบบ"}
-          </button>
-        </div>
-
-        {isAdminLoggedIn && (
-          <div className="bg-[#FFFDF6] border-2 border-[#EADBBD] rounded-3xl p-5 space-y-5 shadow-md">
-            <div className="flex justify-between items-center border-b border-[#EADBBD] pb-2">
-              <h3 className="text-sm font-bold text-[#8C6D23] flex items-center gap-2">
-                <span>🛡️</span> ระบบหลังบ้านผู้ดูแลระบบ (Firebase Cloud Dashboard)
-              </h3>
-              <span className="text-[10px] bg-emerald-500 text-white px-2.5 py-0.5 rounded-full font-bold animate-pulse">REAL-TIME ONLINE</span>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-amber-200 space-y-3 shadow-sm">
-              <h4 className="text-xs font-extrabold text-amber-800 flex items-center gap-1.5">
-                <span>📢</span> ส่งข้อความประกาศแจ้งเตือน (เด้งขึ้นหน้าจอผู้ใช้)
-              </h4>
-              <form onSubmit={handleSendAnnouncement} className="space-y-2">
-                <textarea rows="2" placeholder="พิมพ์ข้อความประกาศ..." value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs bg-gray-50 font-medium" required />
-                <div className="flex gap-2">
-                  <button type="submit" className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm">🚀 ส่งประกาศเด้งหน้าจอผู้ใช้</button>
-                  {activeAnnouncement && (
-                    <button type="button" onClick={handleClearAnnouncement} className="py-2 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold border border-rose-200">🗑️ ปิดประกาศ</button>
-                  )}
-                </div>
-              </form>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                <span>💬</span> ห้องแชทและรายชื่อผู้ใช้งาน ({onlineUsers.length} คน) - คลิกชื่อเพื่อเปิดแชทตอบลูกค้า
-              </h4>
-              {onlineUsers.length === 0 ? (
-                <p className="text-xs text-gray-400">ยังไม่มีข้อมูลผู้ใช้งานซิงก์เข้ามา</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                  {onlineUsers.map((u) => {
-                    const statusInfo = formatUserStatus(u.lastActive);
-                    return (
-                      <div key={u.id} className="flex items-center justify-between p-3 bg-white rounded-2xl border border-gray-200 shadow-sm text-xs hover:border-amber-400 transition">
-                        <div onClick={() => setAdminSelectedUserChat(u)} className="flex items-center gap-3 flex-1 cursor-pointer">
-                          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-600 overflow-hidden border shrink-0">
-                            {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.userName.charAt(0)}
-                          </div>
-                          <div className="truncate">
-                            <p className="font-bold text-gray-800 flex items-center gap-1.5">
-                              <span>{u.userName}</span>
-                              <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded-md">💬 เปิดแชท</span>
-                            </p>
-                            <p className={`text-[10px] font-semibold ${statusInfo.isOnline ? "text-emerald-600" : "text-gray-400"}`}>
-                              {statusInfo.text}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <div className="text-right">
-                            <p className="text-[10px] text-gray-400">เงินคงเหลือ</p>
-                            <p className="font-extrabold text-emerald-600">{formatMoney(u.balance)} บ.</p>
-                          </div>
-                          <button onClick={() => handleDeleteUser(u.id)} className="bg-rose-50 hover:bg-rose-100 text-rose-600 p-2 rounded-xl transition text-sm" title="ลบผู้ใช้">🗑️</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2 pt-3 border-t border-[#EADBBD]">
-              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                <span>📋</span> รายการแจ้งปัญหา ({reports.length} รายการ)
-              </h4>
-              {reports.length > 0 ? (
-                <div className="max-h-40 overflow-y-auto space-y-2">
-                  {reports.map((r) => (
-                    <div key={r.id} className="bg-white p-3 rounded-2xl border border-rose-100 text-xs shadow-sm">
-                      <div className="flex justify-between text-gray-400 text-[10px] mb-1">
-                        <span className="font-bold text-rose-600">👤 {r.userName}</span>
-                        <span>{r.date}</span>
-                      </div>
-                      <p className="text-gray-800 font-medium">{r.text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[11px] text-gray-400">ยังไม่มีรายการแจ้งปัญหาในขณะนี้</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className="lg:col-span-5 space-y-4">
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">โปรไฟล์</h2>
-              <div className="flex items-center gap-4">
-                <div onClick={() => avatarInputRef.current?.click()} className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 cursor-pointer overflow-hidden border">
-                  {userAvatar ? <img src={userAvatar} className="w-full h-full object-cover" /> : <span className="text-xl">?</span>}
-                  <input type="file" ref={avatarInputRef} accept="image/*" className="hidden" onChange={handleAvatarChange} />
-                </div>
-                <div className="flex-1">
-                  <label className="text-[11px] text-gray-400 block mb-1">ชื่อที่แสดง</label>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold">{userName || "ผู้ใช้ทั่วไป"}</span>
-                    <button onClick={() => setUserName(prompt("เปลี่ยนชื่อผู้ใช้:", userName) || userName)} className="text-xs text-gray-400">✏️ แก้ไข</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-[#1E1E1E] text-white rounded-3xl p-6 shadow-md space-y-5">
-              <div>
-                <p className="text-xs text-gray-400">คงเหลือทั้งหมด</p>
-                <h2 className="text-3xl font-extrabold mt-1">
-                  {formatMoney(totalBalance)} <span className="text-sm font-normal text-gray-400">บาท</span>
-                </h2>
-              </div>
-
-              <div className="pt-3 border-t border-gray-800 space-y-3">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-300 font-bold">📊 สัดส่วนรายจ่ายคร่าวๆ</span>
-                  <span className="text-gray-400 font-medium">รวม: {formatMoney(totalExpense)} บ.</span>
-                </div>
-
-                {categoryExpenses.length === 0 ? (
-                  <p className="text-[11px] text-gray-500 text-center py-2">ยังไม่มีข้อมูลรายจ่ายในระบบ</p>
+            <div className="bp-tutorial-actions">
+              <button className="bp-policy-link" onClick={markTutorialSeen}>ข้าม</button>
+              <div style={{ display: "flex", gap: 8 }}>
+                {tutorialStep > 0 && (
+                  <button className="bp-icon-btn" style={{ border: "1px solid var(--line)", borderRadius: 9 }} onClick={() => setTutorialStep((s) => s - 1)}><ChevronLeft size={16} /></button>
+                )}
+                {tutorialStep < TUTORIAL_STEPS.length - 1 ? (
+                  <button className="bp-add-btn income" onClick={() => setTutorialStep((s) => s + 1)} style={{ marginTop: 0 }}>ถัดไป <ChevronRight size={15} /></button>
                 ) : (
-                  <div className="flex items-center gap-4 py-1">
-                    <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
-                      <div className="w-full h-full rounded-full shadow-inner" style={{ background: `conic-gradient(${generatePieChartGradient()})` }} />
-                      <div className="absolute inset-2 bg-[#1E1E1E] rounded-full flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-gray-300">EXP</span>
-                      </div>
-                    </div>
-                    <div className="flex-1 space-y-1.5 max-h-28 overflow-y-auto pr-1">
-                      {categoryExpenses.map((cat) => {
-                        const percent = totalExpense > 0 ? ((cat.sum / totalExpense) * 100).toFixed(0) : 0;
-                        return (
-                          <div key={cat.key} className="flex items-center justify-between text-[11px]">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-                              <span className="text-gray-300 truncate max-w-[90px]">{cat.label}</span>
-                            </div>
-                            <span className="font-bold text-rose-400">~{percent}%</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <button className="bp-add-btn income" onClick={markTutorialSeen} style={{ marginTop: 0 }}><Check size={15} /> เริ่มใช้งาน</button>
                 )}
               </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-800 text-xs">
-                <div><span className="text-gray-400">↗ รายรับ </span><span className="font-bold text-emerald-400">{formatMoney(totalIncome)}</span></div>
-                <div><span className="text-gray-400">↘ รายจ่าย </span><span className="font-bold text-rose-400">{formatMoney(totalExpense)}</span></div>
-                <div><span className="text-gray-400">ธนาคาร </span><span className="font-bold text-gray-200">{formatMoney(calcBankTotal)} บ.</span></div>
-                <div><span className="text-gray-400">เงินสด </span><span className="font-bold text-gray-200">{formatMoney(calcCashTotal)} บ.</span></div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-100 flex flex-wrap gap-2 justify-center">
-              <button onClick={() => setActiveModal("add_tx")} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">➕ เพิ่มรายรับ/รายจ่าย</button>
-              <button onClick={() => setActiveModal("add_debt")} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">🤝 เพิ่มเจ้าหนี้/ลูกหนี้</button>
-              <button onClick={() => setActiveModal("add_goal")} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">🎯 เพิ่มเป้าหมายออม</button>
-            </div>
-          </div>
-
-          <div className="lg:col-span-7 space-y-4">
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-4 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">สรุป เจ้าหนี้ / ลูกหนี้ / รายการเบิก</h2>
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="bg-rose-50 p-3 rounded-2xl border border-rose-100">
-                  <p className="text-rose-600 font-medium text-[11px]">เจ้าหนี้ (เราติด)</p>
-                  <p className="text-base font-extrabold text-rose-700 mt-1">{formatMoney(totalCreditor)} บ.</p>
-                </div>
-                <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
-                  <p className="text-emerald-600 font-medium text-[11px]">ลูกหนี้ (ใครติดเรา)</p>
-                  <p className="text-base font-extrabold text-emerald-700 mt-1">{formatMoney(totalDebtor)} บ.</p>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100">
-                  <p className="text-blue-600 font-medium text-[11px]">รอเบิกคืน</p>
-                  <p className="text-base font-extrabold text-blue-700 mt-1">{formatMoney(totalReimburse)} บ.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* นำเข้าสลิปทีละ 1 รูป */}
-            <div className="bg-white rounded-3xl p-5 shadow-sm space-y-3 border border-gray-100">
-              <h2 className="text-sm font-bold text-[#1E1E1E]">นำเข้าจากสลิปโอนเงิน (เลือกทีละ 1 รูปไม่ใช่เลือกทีละหลายคน)</h2>
-              <div
-                onClick={() => !scanning && fileInputRef.current?.click()}
-                className={`border-2 border-dashed border-gray-200 rounded-2xl p-5 text-center transition cursor-pointer space-y-1 ${
-                  scanning ? "bg-gray-100 opacity-60 cursor-not-allowed" : "bg-gray-50 hover:bg-gray-100"
-                }`}
-              >
-                <div className="text-2xl">🖼️</div>
-                <p className="text-xs font-bold text-gray-700">คลิกเพื่อเลือกรูปสลิป (ทีละ 1 รูปไม่ใช่เลือกทีหลายๆคน)</p>
-                <p className="text-[11px] text-gray-400">ระบบจะสแกนและให้เลือกหมวดหมู่ก่อนบันทึก</p>
-                <input type="file" ref={fileInputRef} accept="image/*" className="hidden" onChange={handleSingleFileUpload} disabled={scanning} />
-              </div>
-              {scanning && <p className="text-xs text-center font-bold text-[#8C6D23] animate-pulse">⏳ กำลังสแกนสลิป กรุณารอสักครู่...</p>}
-              {scanMessage && <p className="text-xs text-center font-bold text-emerald-600 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">{scanMessage}</p>}
             </div>
           </div>
         </div>
+      )}
+
+      <div className="bp-header-row">
+        <h1 className="bp-title">งบประมาณของฉัน</h1>
+        <div className="bp-header-btns">
+          <button className={`bp-scope-btn ${showAdminView ? "shared" : ""}`} onClick={() => setShowAdminView((v) => !v)}>
+            <Shield size={13} /> ผู้ดูแลระบบ
+          </button>
+          <button className={`bp-scope-btn ${dataScope === "shared" ? "shared" : ""}`} onClick={() => switchScope(dataScope === "shared" ? "private" : "shared")}>
+            <Users size={13} /> {dataScope === "shared" ? "ใช้ร่วมกัน" : "ส่วนตัว"}
+          </button>
+        </div>
       </div>
-    </div>
-  );
-}
+      <div className="bp-link-row">
+        <button className="bp-policy-link" onClick={() => setConsentModalOpen(true)}>นโยบายข้อมูล</button>
+        <button className="bp-policy-link" onClick={openTutorial}>คู่มือการใช้งาน</button>
+      </div>
+      {dataScope === "shared" && (
+        <p className="bp-scope-note" style={{ marginBottom: 14 }}>
+          โหมดนี้เปิดอยู่: ทุกคนที่เปิดหน้านี้แล้วเลือกโหมด "ใช้ร่วมกัน" จะเห็นและแก้ไขรายการ เป้าหมาย และหนี้สินเดียวกันทั้งหมด
+        </p>
+      )}
 
-function AdminChatRoom({ targetUserId }) {
-  const [messages, setMessages] = useState([]);
-  const scrollRef = useRef(null);
+      {showAdminView && (
+        <div className="bp-card bp-admin-card">
+          <div className="bp-card-head"><Shield size={16} color="var(--gold)" /><span className="bp-section-title">ระบบหลังบ้านผู้ดูแลระบบ (Firebase Cloud Dashboard)</span></div>
+          <p className="bp-admin-note">
+            จัดการระบบ ประกาศแจ้งเตือน และดูรายชื่อผู้ใช้งานออนไลน์แบบ Real-time
+          </p>
 
-  useEffect(() => {
-    const fetchRoom = async () => {
-      try {
-        const res = await fetch(`https://budget-planner-app-b6620-default-rtdb.asia-southeast1.firebasedatabase.app/chats/${targetUserId}.json`);
-        const data = await res.json();
-        if (data) setMessages(Object.values(data));
-        else setMessages([]);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchRoom();
-    const interval = setInterval(fetchRoom, 2500);
-    return () => clearInterval(interval);
-  }, [targetUserId]);
+          <div style={{ background: "#fff", padding: 12, borderRadius: 12, marginBottom: 14, border: "1px solid var(--line)" }}>
+            <p className="bp-section-title" style={{ marginBottom: 8 }}>ส่งข้อความประกาศแจ้งเตือน (เด้งเฉพาะผู้ที่ออนไลน์อยู่)</p>
+            <textarea rows="2" placeholder="พิมพ์ข้อความประกาศ..." value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} className="bp-input" style={{ marginBottom: 8, fontSize: 13 }} />
+            <button className="bp-add-btn income" style={{ padding: "8px 14px", fontSize: 13 }} onClick={() => handleSendAnnouncementFromAdmin(announcementText)}>🚀 ส่งประกาศเด้งเฉพาะคนออนไลน์</button>
+          </div>
 
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages]);
+          <p className="bp-section-title" style={{ marginBottom: 8 }}>รายชื่อผู้ใช้งานออนไลน์ ({onlineUsers.length} คน)</p>
+          {onlineUsers.length === 0 ? (
+            <p className="bp-empty">ยังไม่มีข้อมูลผู้ใช้งานซิงก์เข้ามา</p>
+          ) : (
+            onlineUsers.map((u) => {
+              const statusInfo = formatUserStatus(u.lastActive);
+              return (
+                <div className="bp-admin-row" key={u.id}>
+                  <div>
+                    <b>{u.userName || "ไม่ระบุชื่อ"}</b>
+                    <div style={{ fontSize: 11, color: statusInfo.isOnline ? "var(--income)" : "var(--ink-faint)" }}>{statusInfo.text}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>คงเหลือ</div>
+                    <div style={{ fontWeight: 700, color: "var(--income)" }}>{formatMoney(u.balance)} บ.</div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
-  return (
-    <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50">
-      {messages.length === 0 ? (
-        <p className="text-xs text-gray-400 text-center py-10">ยังไม่มีข้อความสนทนาในห้องนี้</p>
-      ) : (
-        messages.map((msg) => {
-          const isAdmin = msg.sender === "admin";
+      <div className="bp-card">
+        <div className="bp-card-head"><span className="bp-section-title">โปรไฟล์</span></div>
+        <div className="bp-profile-row">
+          <div className="bp-avatar-wrap" onClick={() => avatarInputRef.current && avatarInputRef.current.click()}>
+            {profile.avatar ? (<img src={profile.avatar} className="bp-avatar-img" alt="รูปโปรไฟล์" />) : (<div className="bp-avatar-placeholder">{(profile.name || "?").slice(0, 1)}</div>)}
+            <span className="bp-avatar-edit-badge"><Pencil size={11} /></span>
+          </div>
+          <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarChange} />
+          <div style={{ flex: 1 }}>
+            <label className="bp-field-label">ชื่อที่แสดง</label>
+            <input className="bp-input" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="เช่น Gun" />
+          </div>
+        </div>
+        <p className="bp-slip-hint" style={{ marginTop: 10 }}>ชื่อนี้จะแสดงเป็น "ผู้เพิ่มรายการ" เมื่อเปิดโหมด "ใช้ร่วมกัน" และใช้แสดงสถานะออนไลน์ในระบบหลังบ้าน</p>
+      </div>
+
+      <div className="bp-card bp-hero">
+        <p className="bp-hero-label">คงเหลือทั้งหมด</p>
+        <p className="bp-hero-balance">{formatMoney(balance)}<small>บาท</small></p>
+        <div className="bp-hero-row">
+          <div className="bp-hero-stat in"><ArrowUpRight size={14} /> รายรับ <b>{formatMoney(totalIncome)}</b></div>
+          <div className="bp-hero-stat out"><ArrowDownRight size={14} /> รายจ่าย <b>{formatMoney(totalExpense)}</b></div>
+        </div>
+        <div className="bp-hero-accounts">
+          <span>ธนาคาร <b>{formatMoney(bankBalance)}</b> บาท</span>
+          <span>เงินสด <b>{formatMoney(cashBalance)}</b> บาท</span>
+        </div>
+      </div>
+
+      <div className="bp-card">
+        <div className="bp-card-head"><PiggyBank size={16} color="var(--ink-soft)" /><span className="bp-section-title">จัดสรรงบประมาณเป็นเซ็ต</span></div>
+        <p className="bp-slip-hint" style={{ margin: "0 0 12px" }}>
+          ตั้งวงเงินต่อเดือนของแต่ละเซ็ต ระบบคำนวณงบต่อวันให้ล่วงหน้า เป็นเครื่องมือวางแผนแยกต่างหาก ไม่ได้ผูกกับรายการรายรับ-รายจ่ายด้านล่างอัตโนมัติ กดปุ่ม "ใช้ไป" เพื่ออัปเดตยอดใช้ในเซ็ตเอง
+        </p>
+        {budgetSets.length === 0 && <p className="bp-empty">ยังไม่มีเซ็ตงบประมาณ เพิ่มเซ็ตแรกได้เลย</p>}
+        {budgetSets.map((s) => {
+          if (editingBudgetSetId === s.id) {
+            return (
+              <div className="bp-goal-form" key={s.id}>
+                <div><label className="bp-field-label">ชื่อเซ็ต</label><input value={budgetSetDraft.name} onChange={(e) => setBudgetSetDraft({ ...budgetSetDraft, name: e.target.value })} /></div>
+                <div><label className="bp-field-label">วงเงินต่อเดือน (บาท)</label><input type="number" value={budgetSetDraft.monthlyAmount} onChange={(e) => setBudgetSetDraft({ ...budgetSetDraft, monthlyAmount: e.target.value })} /></div>
+                <div className="bp-goal-actions">
+                  <button className="bp-add-btn income" style={{ flex: 1, padding: "9px" }} onClick={saveBudgetSetEdit}><Check size={15} /> บันทึก</button>
+                  <button className="bp-icon-btn" style={{ border: "1px solid var(--line)", borderRadius: 9 }} onClick={cancelBudgetSetEdit}><X size={16} /></button>
+                </div>
+              </div>
+            );
+          }
+          const stats = budgetSetStats(s);
+          const pct = s.monthlyAmount > 0 ? Math.min((s.spentThisMonth / s.monthlyAmount) * 100, 100) : 0;
           return (
-            <div key={msg.id} className={`flex flex-col ${isAdmin ? "items-end" : "items-start"}`}>
-              <span className="text-[10px] text-gray-400 px-1 mb-0.5">{msg.senderName} • {msg.time}</span>
-              <div className={`p-3 rounded-2xl text-xs max-w-[80%] leading-relaxed shadow-sm whitespace-pre-wrap ${
-                isAdmin ? "bg-[#8C6D23] text-white rounded-tr-sm" : "bg-white text-gray-800 border border-gray-200 rounded-tl-sm"
-              }`}>
-                {msg.text}
+            <div className="bp-goal-item" key={s.id}>
+              <div className="bp-goal-row">
+                <span className="bp-goal-name">{s.name}</span>
+                <div className="bp-goal-item-actions">
+                  <button className="bp-icon-btn" onClick={() => startEditBudgetSet(s)}><Pencil size={13} /></button>
+                  <button className="bp-icon-btn" onClick={() => deleteBudgetSet(s.id)}><Trash2 size={13} /></button>
+                </div>
+              </div>
+              <div className="bp-goal-track"><div className="bp-goal-fill" style={{ width: `${pct}%`, background: pct >= 100 ? "var(--expense)" : "var(--gold)" }} /></div>
+              <p className="bp-goal-pct">ใช้ไปแล้ว {formatMoney(s.spentThisMonth)} จาก {formatMoney(s.monthlyAmount)} บาท/เดือน</p>
+              <div className="bp-budgetset-stats">
+                <span>งบต่อวัน (ตามแผน) <b>{formatMoney(stats.dailyPlanned)}</b> บาท</span>
+                <span>เหลือใช้เฉลี่ย <b style={{ color: stats.dailyRemaining < 0 ? "var(--expense)" : "var(--income)" }}>{formatMoney(stats.dailyRemaining)}</b> บาท/วัน ({stats.daysLeft} วันที่เหลือ)</span>
+              </div>
+              <div className="bp-contrib-row">
+                <input type="number" placeholder="ใช้ไปเท่าไหร่" value={quickSpendDraft[s.id] || ""} onChange={(e) => setQuickSpendDraft((prev) => ({ ...prev, [s.id]: e.target.value }))} />
+                <button type="button" className="bp-contrib-add" onClick={() => quickSpend(s.id)}>ใช้ไป</button>
+                <button type="button" className="bp-slip-discard" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => resetBudgetSet(s.id)}>รีเซ็ตเดือนนี้</button>
               </div>
             </div>
           );
-        })
-      )}
+        })}
+        <form className="bp-form-grid" onSubmit={handleAddBudgetSet} style={{ marginTop: budgetSets.length ? 14 : 0 }}>
+          <div className="bp-row-2">
+            <div><label className="bp-field-label">ชื่อเซ็ตใหม่</label><input className="bp-input" value={budgetSetForm.name} onChange={(e) => setBudgetSetForm({ ...budgetSetForm, name: e.target.value })} placeholder="เช่น Set 1: ค่ากินรายวัน" /></div>
+            <div><label className="bp-field-label">วงเงิน/เดือน (บาท)</label><input className="bp-input" type="number" value={budgetSetForm.monthlyAmount} onChange={(e) => setBudgetSetForm({ ...budgetSetForm, monthlyAmount: e.target.value })} /></div>
+          </div>
+          <button className="bp-add-btn income" type="submit"><PlusCircle size={16} /> เพิ่มเซ็ตงบประมาณ</button>
+        </form>
+      </div>
+
+      <div className="bp-grid">
+        <div>
+          <div className="bp-card">
+            <div className="bp-card-head"><Target size={16} color="var(--gold)" /><span className="bp-section-title">เป้าหมายการออม</span></div>
+            {goals.length === 0 && !addingGoal && <p className="bp-empty">ยังไม่มีเป้าหมาย เพิ่มเป้าหมายแรกได้เลย</p>}
+            {goals.map((g) =>
+              editingGoalId === g.id ? (
+                <div className="bp-goal-form" key={g.id}>
+                  <div><label className="bp-field-label">ชื่อเป้าหมาย</label><input value={goalDraft.name} onChange={(e) => setGoalDraft({ ...goalDraft, name: e.target.value })} /></div>
+                  <div className="bp-row-2">
+                    <div><label className="bp-field-label">เป้าหมาย (บาท)</label><input type="number" value={goalDraft.target} onChange={(e) => setGoalDraft({ ...goalDraft, target: e.target.value })} /></div>
+                    <div><label className="bp-field-label">ออมแล้ว (บาท)</label><input type="number" value={goalDraft.saved} onChange={(e) => setGoalDraft({ ...goalDraft, saved: e.target.value })} /></div>
+                  </div>
+                  <div className="bp-goal-actions">
+                    <button className="bp-add-btn income" style={{ flex: 1, padding: "9px" }} onClick={saveGoalDraft}><Check size={15} /> บันทึก</button>
+                    <button className="bp-icon-btn" style={{ border: "1px solid var(--line)", borderRadius: 9 }} onClick={cancelGoalDraft}><X size={16} /></button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bp-goal-item" key={g.id}>
+                  <div className="bp-goal-row">
+                    <span className="bp-goal-name">{g.name}</span>
+                    <div className="bp-goal-item-actions">
+                      <button className="bp-icon-btn" onClick={() => startEditGoal(g)}><Pencil size={13} /></button>
+                      <button className="bp-icon-btn" onClick={() => deleteGoal(g.id)}><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                  <div className="bp-goal-track"><div className="bp-goal-fill" style={{ width: `${g.target > 0 ? Math.min((g.saved / g.target) * 100, 100) : 0}%` }} /></div>
+                  <p className="bp-goal-pct">{formatMoney(g.saved)} บาท จาก {formatMoney(g.target)} บาท{g.target > 0 ? ` (${Math.round(Math.min(g.saved / g.target, 1) * 100)}%)` : ""}</p>
+                  <div className="bp-contrib-row">
+                    <button type="button" className={`bp-contrib-type ${(contributionDrafts[g.id]?.type || "deposit") === "deposit" ? "active deposit" : ""}`} onClick={() => setContributionDrafts((prev) => ({ ...prev, [g.id]: { ...(prev[g.id] || { amount: "" }), type: "deposit" } }))}>ฝาก</button>
+                    <button type="button" className={`bp-contrib-type ${contributionDrafts[g.id]?.type === "withdraw" ? "active withdraw" : ""}`} onClick={() => setContributionDrafts((prev) => ({ ...prev, [g.id]: { ...(prev[g.id] || { amount: "" }), type: "withdraw" } }))}>ถอน</button>
+                    <input type="number" placeholder="จำนวนเงิน" value={contributionDrafts[g.id]?.amount || ""} onChange={(e) => setContributionDrafts((prev) => ({ ...prev, [g.id]: { ...(prev[g.id] || { type: "deposit" }), amount: e.target.value } }))} />
+                    <button type="button" className="bp-contrib-add" onClick={() => addGoalContribution(g.id, contributionDrafts[g.id]?.amount, contributionDrafts[g.id]?.type || "deposit")}>เพิ่ม</button>
+                  </div>
+                  {g.history && g.history.length > 0 && (
+                    <div className="bp-goal-history">
+                      {g.history.slice(0, 3).map((h) => (
+                        <span key={h.id} className={`bp-goal-hist-item ${h.type}`}>{h.type === "withdraw" ? "-" : "+"}{formatMoney(h.amount)} · {formatDateThai(h.date)}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+            {addingGoal ? (
+              <div className="bp-goal-form">
+                <div><label className="bp-field-label">ชื่อเป้าหมาย</label><input value={goalDraft.name} onChange={(e) => setGoalDraft({ ...goalDraft, name: e.target.value })} /></div>
+                <div className="bp-row-2">
+                  <div><label className="bp-field-label">เป้าหมาย (บาท)</label><input type="number" value={goalDraft.target} onChange={(e) => setGoalDraft({ ...goalDraft, target: e.target.value })} /></div>
+                  <div><label className="bp-field-label">ออมแล้ว (บาท)</label><input type="number" value={goalDraft.saved} onChange={(e) => setGoalDraft({ ...goalDraft, saved: e.target.value })} /></div>
+                </div>
+                <div className="bp-goal-actions">
+                  <button className="bp-add-btn income" style={{ flex: 1, padding: "9px" }} onClick={saveGoalDraft}><Check size={15} /> บันทึก</button>
+                  <button className="bp-icon-btn" style={{ border: "1px solid var(--line)", borderRadius: 9 }} onClick={cancelGoalDraft}><X size={16} /></button>
+                </div>
+              </div>
+            ) : (
+              <button className="bp-add-goal-btn" onClick={startAddGoal}><PlusCircle size={15} /> เพิ่มเป้าหมายใหม่</button>
+            )}
+          </div>
+
+          <div className="bp-card">
+            <div className="bp-card-head"><Scale size={16} color="var(--ink-soft)" /><span className="bp-section-title">ปรับยอดให้ตรงกับบัญชีจริง</span></div>
+            {ACCOUNTS.map((a) => (
+              <div className="bp-reconcile-row" key={a.key}>
+                <div className="bp-reconcile-label">{a.label}</div>
+                <div className="bp-reconcile-current">ในระบบตอนนี้: {formatMoney(a.key === "bank" ? bankBalance : cashBalance)} บาท</div>
+                <div className="bp-reconcile-input-row">
+                  <input type="number" placeholder="ยอดจริงที่มี" value={reconcileDraft[a.key]} onChange={(e) => setReconcileDraft({ ...reconcileDraft, [a.key]: e.target.value })} />
+                  <button onClick={() => handleReconcile(a.key)}>ปรับยอด</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="bp-card">
+            <p className="bp-section-title" style={{ marginBottom: 12 }}>นำเข้าจากสลิปโอนเงิน</p>
+            <input ref={slipInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { handleSlipFiles(e.target.files); e.target.value = ""; }} />
+            <div className="bp-slip-drop" onClick={() => slipInputRef.current && slipInputRef.current.click()}>
+              <ImagePlus size={22} color="var(--ink-soft)" />
+              <span className="bp-slip-cta">เลือกรูปสลิป</span>
+              <span className="bp-slip-sub">เลือกได้หลายรูปพร้อมกัน รวมถึงสลิปเก่าที่ยังไม่ได้บันทึก</span>
+            </div>
+            <p className="bp-slip-hint">ระบบอ่านยอดเงินและวันที่จากรูปให้อัตโนมัติด้วย AI กรุณาตรวจสอบตัวเลขก่อนกดยืนยันทุกครั้ง ต้องเลือกรูปเองแต่ละครั้ง ระบบยังดึงจากคลังภาพให้อัตโนมัติต่อเนื่องไม่ได้</p>
+            {pendingSlips.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                {pendingSlips.map((s) => {
+                  const opts = s.type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+                  return (
+                    <div className="bp-slip-card" key={s.id}>
+                      <img className="bp-slip-thumb" src={s.imageData} alt="สลิปโอนเงิน" />
+                      <div className="bp-slip-body">
+                        {s.status === "reading" ? (
+                          <div className="bp-slip-status"><Loader2 size={14} className="bp-spin" /> กำลังอ่านยอดเงินจากรูป...</div>
+                        ) : (
+                          <>
+                            {s.status === "manual" && <div className="bp-slip-status">อ่านยอดจากรูปไม่ได้ กรุณากรอกเอง</div>}
+                            <div className="bp-slip-type-toggle">
+                              <button type="button" className={`bp-slip-type-btn expense ${s.type === "expense" ? "active expense" : ""}`} onClick={() => updateSlip(s.id, { type: "expense", category: EXPENSE_CATEGORIES[0].key })}>รายจ่าย</button>
+                              <button type="button" className={`bp-slip-type-btn income ${s.type === "income" ? "active income" : ""}`} onClick={() => updateSlip(s.id, { type: "income", category: INCOME_CATEGORIES[0].key })}>รายรับ</button>
+                            </div>
+                            <div className="bp-slip-fields">
+                              <div className="bp-slip-line">
+                                <input type="number" placeholder="จำนวนเงิน" value={s.amount} onChange={(e) => updateSlip(s.id, { amount: e.target.value })} />
+                                <select value={s.category} onChange={(e) => updateSlip(s.id, { category: e.target.value })}>
+                                  {opts.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
+                                </select>
+                              </div>
+                              <div className="bp-slip-line">
+                                <input type="text" placeholder="รายละเอียด" value={s.note} onChange={(e) => updateSlip(s.id, { note: e.target.value })} />
+                                <input type="date" value={s.date} onChange={(e) => updateSlip(s.id, { date: e.target.value })} />
+                              </div>
+                            </div>
+                            <div className="bp-slip-actions">
+                              <button className="bp-slip-confirm" disabled={!s.amount || parseFloat(s.amount) <= 0} onClick={() => confirmSlip(s.id)}><Check size={14} /> เพิ่มรายการนี้</button>
+                              <button className="bp-slip-discard" onClick={() => discardSlip(s.id)}>ยกเลิก</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="bp-card">
+            <p className="bp-section-title" style={{ marginBottom: 12 }}>เพิ่มรายการ</p>
+            <div className="bp-type-toggle">
+              <button className={`bp-type-btn expense ${formType === "expense" ? "active expense" : ""}`} onClick={() => handleTypeSwitch("expense")} type="button">รายจ่าย</button>
+              <button className={`bp-type-btn income ${formType === "income" ? "active income" : ""}`} onClick={() => handleTypeSwitch("income")} type="button">รายรับ</button>
+            </div>
+            <div className="bp-account-toggle">
+              {ACCOUNTS.map((a) => (
+                <button key={a.key} type="button" className={`bp-account-btn ${formAccount === a.key ? "active" : ""}`} onClick={() => setFormAccount(a.key)}>{a.label}</button>
+              ))}
+            </div>
+            <form className="bp-form-grid" onSubmit={handleAdd}>
+              <div><label className="bp-field-label">จำนวนเงิน (บาท)</label><input className="bp-input bp-amount-input" type="number" inputMode="decimal" placeholder="0.00" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} required /></div>
+              <div className="bp-row-2">
+                <div><label className="bp-field-label">หมวดหมู่</label>
+                  <select className="bp-select" value={formCategory} onChange={(e) => setFormCategory(e.target.value)}>
+                    {currentCategoryOptions.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
+                  </select>
+                </div>
+                <div><label className="bp-field-label">วันที่</label><input className="bp-input" type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} /></div>
+              </div>
+              <div><label className="bp-field-label">รายละเอียด (ไม่บังคับ)</label><input className="bp-input" type="text" placeholder="เช่น ข้าวเที่ยงกับเพื่อน" value={formNote} onChange={(e) => setFormNote(e.target.value)} /></div>
+              <button className={`bp-add-btn ${formType}`} type="submit"><Plus size={16} /> เพิ่มรายการ</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div className="bp-card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <p className="bp-section-title">แชทซัพพอร์ต & AI ผู้ช่วย</p>
+          <button className="bp-scope-btn" onClick={() => setChatOpen(!chatOpen)}>{chatOpen ? "ซ่อนแชท" : "💬 เปิดแชท"}</button>
+        </div>
+        {chatOpen && (
+          <div style={{ display: "flex", flexDirection: "column", height: 320, background: "var(--bg)", borderRadius: 12, padding: 12 }}>
+            <div ref={chatScrollRef} style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+              {chatMessages.length === 0 ? (
+                <p className="bp-empty" style={{ textAlign: "center", margin: "auto" }}>พิมพ์ข้อความสอบถามหรือปรึกษาการเงินได้เลยครับ</p>
+              ) : (
+                chatMessages.map((msg) => (
+                  <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: msg.sender === "admin" ? "flex-start" : "flex-end" }}>
+                    <span style={{ fontSize: 10, color: "var(--ink-faint)", marginBottom: 2 }}>{msg.senderName} · {msg.time}</span>
+                    <div style={{ padding: "8px 12px", borderRadius: 12, fontSize: 13, maxWidth: "85%", background: msg.sender === "admin" ? "#fff" : "var(--ink)", color: msg.sender === "admin" ? "var(--ink)" : "#fff", border: msg.sender === "admin" ? "1px solid var(--line)" : "none" }}>{msg.text}</div>
+                  </div>
+                ))
+              )}
+            </div>
+            <form onSubmit={handleSendUserChat} style={{ display: "flex", gap: 6 }}>
+              <input type="text" className="bp-input" style={{ flex: 1, padding: "8px 10px", fontSize: 13 }} placeholder="พิมพ์ข้อความ..." value={chatInput} onChange={(e) => setChatInput(e.target.value)} required />
+              <button type="submit" className="bp-add-btn income" style={{ padding: "8px 14px", fontSize: 13, marginTop: 0 }}>ส่ง</button>
+            </form>
+          </div>
+        )}
+      </div>
+
+      <div className="bp-card">
+        <p className="bp-section-title" style={{ marginBottom: 12 }}>ใช้จ่ายตามหมวดหมู่</p>
+        {categoryBreakdown.length === 0 ? (
+          <p className="bp-empty">ยังไม่มีรายจ่าย เพิ่มรายการเพื่อดูสัดส่วน</p>
+        ) : (
+          categoryBreakdown.map((c) => (
+            <div className="bp-cat-row" key={c.key}>
+              <span className="bp-cat-dot" style={{ background: c.color }} />
+              <span className="bp-cat-label">{c.label}</span>
+              <span className="bp-cat-bar-track"><span className="bp-cat-bar-fill" style={{ width: `${maxCategoryAmount ? (c.amount / maxCategoryAmount) * 100 : 0}%`, background: c.color }} /></span>
+              <span className="bp-cat-amt">{formatMoney(c.amount)}</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="bp-card">
+        <p className="bp-section-title" style={{ marginBottom: 12 }}>หนี้สินและรายการเบิก</p>
+        <div className="bp-debt-stats">
+          <div className="bp-debt-stat expense"><span>ติดหนี้ค้างอยู่</span><b>{formatMoney(totalDebtUnpaid)} บาท</b></div>
+          <div className="bp-debt-stat income"><span>รอเบิกคืน</span><b>{formatMoney(totalClaimUnpaid)} บาท</b></div>
+        </div>
+        {debtsByPerson.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <p className="bp-field-label" style={{ marginBottom: 8 }}>สรุปตามคู่กรณี (ที่ยังไม่ชำระ)</p>
+            {debtsByPerson.map((p) => (
+              <div className="bp-admin-row" key={p.name}>
+                <span>{p.name}</span>
+                <span>
+                  {p.debt > 0 && <span style={{ color: "var(--expense)" }}>ติดหนี้ {formatMoney(p.debt)}</span>}
+                  {p.debt > 0 && p.claim > 0 && "  ·  "}
+                  {p.claim > 0 && <span style={{ color: "var(--income)" }}>รอเบิก {formatMoney(p.claim)}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="bp-type-toggle">
+          <button type="button" className={`bp-type-btn expense ${debtForm.kind === "debt" ? "active expense" : ""}`} onClick={() => setDebtForm({ ...debtForm, kind: "debt" })}>หนี้ที่ติดอยู่</button>
+          <button type="button" className={`bp-type-btn income ${debtForm.kind === "claim" ? "active income" : ""}`} onClick={() => setDebtForm({ ...debtForm, kind: "claim" })}>รายการเบิก</button>
+        </div>
+        <form className="bp-form-grid" onSubmit={handleAddDebt}>
+          <div><label className="bp-field-label">รายละเอียด</label><input className="bp-input" value={debtForm.description} onChange={(e) => setDebtForm({ ...debtForm, description: e.target.value })} placeholder="เช่น ยืมเพื่อนค่าทริป" required /></div>
+          <div className="bp-row-2">
+            <div><label className="bp-field-label">จำนวนเงิน (บาท)</label><input className="bp-input bp-amount-input" type="number" value={debtForm.amount} onChange={(e) => setDebtForm({ ...debtForm, amount: e.target.value })} required /></div>
+            <div><label className="bp-field-label">กับใคร (ไม่บังคับ)</label><input className="bp-input" value={debtForm.counterparty} onChange={(e) => setDebtForm({ ...debtForm, counterparty: e.target.value })} /></div>
+          </div>
+          <div><label className="bp-field-label">วันครบกำหนด (ไม่บังคับ)</label><input className="bp-input" type="date" value={debtForm.dueDate} onChange={(e) => setDebtForm({ ...debtForm, dueDate: e.target.value })} /></div>
+          <button className={`bp-add-btn ${debtForm.kind === "debt" ? "expense" : "income"}`} type="submit"><Plus size={16} /> เพิ่มรายการ</button>
+        </form>
+        {sortedDebts.length === 0 ? (
+          <p className="bp-empty" style={{ marginTop: 12 }}>ยังไม่มีรายการหนี้สินหรือรายการเบิก</p>
+        ) : (
+          <div className="bp-tx-list" style={{ marginTop: 14 }}>
+            {sortedDebts.map((d) =>
+              editingDebtId === d.id ? (
+                <div className="bp-tx-item" key={d.id}>
+                  <div className="bp-edit-row">
+                    <div className="bp-edit-line">
+                      <input value={debtEditDraft.description} onChange={(e) => setDebtEditDraft({ ...debtEditDraft, description: e.target.value })} />
+                      <input type="number" value={debtEditDraft.amount} onChange={(e) => setDebtEditDraft({ ...debtEditDraft, amount: e.target.value })} />
+                    </div>
+                    <div className="bp-edit-line">
+                      <input placeholder="กับใคร" value={debtEditDraft.counterparty} onChange={(e) => setDebtEditDraft({ ...debtEditDraft, counterparty: e.target.value })} />
+                      <input type="date" value={debtEditDraft.dueDate} onChange={(e) => setDebtEditDraft({ ...debtEditDraft, dueDate: e.target.value })} />
+                    </div>
+                    <div className="bp-edit-actions">
+                      <button className="bp-icon-btn" onClick={saveDebtEdit}><Check size={16} color="var(--income)" /></button>
+                      <button className="bp-icon-btn" onClick={cancelDebtEdit}><X size={16} /></button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bp-tx-item" key={d.id}>
+                  <span className="bp-tx-dot" style={{ background: d.kind === "debt" ? "var(--expense)" : "var(--income)" }} />
+                  <div className="bp-tx-main">
+                    <div className="bp-tx-cat">{d.description}</div>
+                    <div className="bp-tx-note">{d.counterparty}{d.status === "paid" ? " · ชำระแล้ว" : ""}</div>
+                    <div className="bp-tx-date">
+                      {d.dueDate ? `ครบกำหนด ${formatDateThai(d.dueDate)}` : formatDateThai(d.dateAdded)}
+                      {d.status === "unpaid" && d.dueDate && d.dueDate < todayStr() ? <span className="bp-overdue-badge">เลยกำหนด</span> : null}
+                    </div>
+                  </div>
+                  <span className={`bp-tx-amt ${d.kind === "debt" ? "expense" : "income"}`} style={{ opacity: d.status === "paid" ? 0.4 : 1 }}>{formatMoney(d.amount)}</span>
+                  <div className="bp-tx-actions">
+                    <button className="bp-icon-btn" onClick={() => toggleDebtStatus(d.id)} title="ทำเครื่องหมายว่าชำระแล้ว"><Check size={14} color={d.status === "paid" ? "var(--income)" : "var(--ink-faint)"} /></button>
+                    <button className="bp-icon-btn" onClick={() => startEditDebt(d)}><Pencil size={14} /></button>
+                    <button className="bp-icon-btn" onClick={() => deleteDebt(d.id)}><Trash2 size={14} /></button>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="bp-card">
+        <p className="bp-section-title" style={{ marginBottom: 12 }}>รายการทั้งหมด ({transactions.length})</p>
+        {sortedTransactions.length === 0 ? (
+          <p className="bp-empty">ยังไม่มีรายการ เริ่มเพิ่มรายรับหรือรายจ่ายด้านบนได้เลย</p>
+        ) : (
+          <div className="bp-tx-list bp-tx-cols">
+            {sortedTransactions.map((t) => {
+              const info = categoryInfo(t.category);
+              const account = t.account === "cash" ? "cash" : "bank";
+              if (editingId === t.id) {
+                const opts = editDraft.type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+                return (
+                  <div className="bp-tx-item" key={t.id}>
+                    <div className="bp-edit-row">
+                      <div className="bp-edit-line">
+                        <input type="number" value={editDraft.amount} onChange={(e) => setEditDraft({ ...editDraft, amount: e.target.value })} />
+                        <select value={editDraft.category} onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })}>
+                          {opts.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
+                        </select>
+                      </div>
+                      <div className="bp-edit-line">
+                        <input type="text" placeholder="รายละเอียด" value={editDraft.note} onChange={(e) => setEditDraft({ ...editDraft, note: e.target.value })} />
+                        <input type="date" value={editDraft.date} onChange={(e) => setEditDraft({ ...editDraft, date: e.target.value })} />
+                      </div>
+                      <div className="bp-edit-line">
+                        <select value={editDraft.account || "bank"} onChange={(e) => setEditDraft({ ...editDraft, account: e.target.value })}>
+                          {ACCOUNTS.map((a) => (<option key={a.key} value={a.key}>{a.label}</option>))}
+                        </select>
+                      </div>
+                      <div className="bp-edit-actions">
+                        <button className="bp-icon-btn" onClick={saveEdit}><Check size={16} color="var(--income)" /></button>
+                        <button className="bp-icon-btn" onClick={cancelEdit}><X size={16} /></button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div className="bp-tx-item" key={t.id}>
+                  <span className="bp-tx-dot" style={{ background: info.color }} />
+                  <div className="bp-tx-main">
+                    <div className="bp-tx-cat">{info.label}</div>
+                    {t.note && <div className="bp-tx-note">{t.note}</div>}
+                    <div className="bp-tx-date">{formatDateThai(t.date)}{account === "cash" ? ` · ${ACCOUNT_LABEL.cash}` : ""}{t.addedBy ? ` · ${t.addedBy}` : ""}</div>
+                  </div>
+                  <span className={`bp-tx-amt ${t.type}`}>{t.type === "income" ? "+" : "−"}{formatMoney(t.amount)}</span>
+                  <div className="bp-tx-actions">
+                    <button className="bp-icon-btn" onClick={() => startEdit(t)}><Pencil size={14} /></button>
+                    <button className="bp-icon-btn" onClick={() => deleteTx(t.id)}><Trash2 size={14} /></button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {saveError && <p className="bp-save-note">บันทึกข้อมูลอัตโนมัติไม่สำเร็จ — ข้อมูลจะหายเมื่อปิดหน้านี้</p>}
     </div>
   );
 }
-
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
