@@ -170,11 +170,7 @@ function App() {
 
   // Modals & Admin State
   const [showPrivacyNotice, setShowPrivacyNotice] = useState(() => !localStorage.getItem("bp_privacyAccepted"));
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [adminUsername, setAdminUsername] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
-  const [adminLoginError, setAdminLoginError] = useState("");
 
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportText, setReportText] = useState("");
@@ -236,28 +232,28 @@ function App() {
   const fileInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  // ควบคุมการเลื่อนหน้าจอ
+  // ระบบจัดการการเลื่อนหน้าจอที่ปลอดภัยและลื่นไหลที่สุด (ป้องกันหน้าจอค้างเลื่อนไม่ลง)
   useEffect(() => {
-    const isAnyModalOpen =
-      activeModal ||
+    const hasOpenModal =
+      activeModal !== null ||
       isMenuOpen ||
       showPrivacyNotice ||
-      showAdminLogin ||
       showReportModal ||
-      goalToDeposit ||
-      goalToEdit ||
-      pendingSlip ||
-      itemToDelete ||
-      onboardingStep ||
+      goalToDeposit !== null ||
+      goalToEdit !== null ||
+      pendingSlip !== null ||
+      itemToDelete !== null ||
+      onboardingStep !== null ||
       tutorialStep > 0 ||
-      activeAnnouncement ||
-      adminSelectedUserChat;
+      activeAnnouncement !== null ||
+      adminSelectedUserChat !== null;
 
-    if (isAnyModalOpen) {
+    if (hasOpenModal) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "auto";
     }
+    
     return () => {
       document.body.style.overflow = "auto";
     };
@@ -265,7 +261,6 @@ function App() {
     activeModal,
     isMenuOpen,
     showPrivacyNotice,
-    showAdminLogin,
     showReportModal,
     goalToDeposit,
     goalToEdit,
@@ -331,7 +326,7 @@ function App() {
   useEffect(() => localStorage.setItem("bp_budgetSets", JSON.stringify(budgetSets)), [budgetSets]);
   useEffect(() => localStorage.setItem("bp_activeBudgetSetId", activeBudgetSetId), [activeBudgetSetId]);
 
-  // ส่ง Heartbeat สถานะออนไลน์
+  // ส่ง Heartbeat สถานะออนไลน์แบบลื่นไหล
   useEffect(() => {
     if (!userName) return;
     const sendHeartbeat = async () => {
@@ -354,7 +349,7 @@ function App() {
     };
 
     sendHeartbeat();
-    const interval = setInterval(sendHeartbeat, 10000);
+    const interval = setInterval(sendHeartbeat, 12000);
     return () => clearInterval(interval);
   }, [userName, userAvatar, totalBalance, deviceId]);
 
@@ -420,7 +415,7 @@ function App() {
     };
 
     fetchCloudData();
-    const interval = setInterval(fetchCloudData, 3000);
+    const interval = setInterval(fetchCloudData, 4000);
     return () => clearInterval(interval);
   }, [deviceId, isAdminLoggedIn]);
 
@@ -430,7 +425,7 @@ function App() {
     }
   }, [chatMessages, activeModal]);
 
-  // 🤖 ระบบ AI บอทอัจฉริยะวิเคราะห์เจตนา + ถามย้ำ + ให้คำตอบ
+  // 🤖 ระบบ AI บอทอัจฉริยะวิเคราะห์เจตนา + ถามย้ำอัตโนมัติ
   const handleSendUserChat = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
@@ -453,51 +448,21 @@ function App() {
       setChatMessages((prev) => [...prev, userMsg]);
       setChatInput("");
 
-      // วิเคราะห์เจตนาเชิงลึก (Intent & Semantic Analysis)
       const lower = userText.toLowerCase();
       let botReplyText = "";
 
-      // หมวด 1: ปัญหาหน้าจอเลื่อนไม่ได้ / บั๊ก / ใช้งานไม่ได้
-      if (lower.includes("เลื่อน") || lower.includes("ขยับ") || lower.includes("พัง") || lower.includes("บั๊ก") || lower.includes(" error ") || lower.includes("ใช้ไม่ได้") || lower.includes("ค้าง")) {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
-          "คุณกำลังสอบถามเกี่ยวกับ **ปัญหาการใช้งาน / หน้าจอเลื่อนไม่ได้ใช่ไหมครับ?**\n\n" +
-          "💡 **วิธีแก้ไขเบื้องต้น:**\n" +
-          "อาการนี้เกิดจากหน้าต่างป๊อปอัปค้างการล็อกหน้าจอ แนะนำให้กดปิดปุ่มหรือรีเฟรชหน้าเว็บ 1 ครั้ง ระบบจะกลับมาเลื่อนได้ปกติครับ หรือกดแจ้งปัญหาในเมนู 3 ขีดได้เลยครับ!";
-      } 
-      // หมวด 2: วิธีใส่รูป / รูปโปรไฟล์ / อัปโหลดสลิป
-      else if (lower.includes("รูป") || lower.includes("สลิป") || lower.includes("ภาพ") || lower.includes("โปรไฟล์") || lower.includes("อัปโหลด")) {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
-          "คุณกำลังต้องการสอบถามเกี่ยวกับ **การใส่รูปภาพหรืออัปโหลดสลิปโอนเงินใช่ไหมครับ?**\n\n" +
-          "💡 **คำตอบ:**\n" +
-          "• การเปลี่ยนรูปโปรไฟล์: กดที่วงกลมรูปโปรไฟล์ด้านซ้ายบนเพื่อเลือกรูปภาพจากเครื่อง\n" +
-          "• การสแกนสลิป: ไปที่กล่องประมวลผลสลิปหน้าแรก เลือกรูปสลิปทีละ 1 รูป ระบบจะดึงยอดเงินและวันที่ให้อัตโนมัติครับ!";
-      } 
-      // หมวด 3: วิธีใช้งานแอป / เริ่มต้นยังไง / คู่มือ
-      else if (lower.includes("วิธี") || lower.includes("ยังไง") || lower.includes("ใช้") || lower.includes("เริ่มต้น") || lower.includes("คู่มือ") || lower.includes("app")) {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
-          "คุณกำลังต้องการทราบ **วิธีการใช้งานแอปพลิเคชันใช่ไหมครับ?**\n\n" +
-          "💡 **สรุปวิธีใช้งานหลัก:**\n" +
-          "1. บันทึกรายรับ-รายจ่าย: กดปุ่ม '+' เพิ่มข้อมูลหน้าหลัก\n" +
-          "2. ตั้งเป้าหมายออมเงิน: สร้างเป้าหมายและกดเติมเงินออมได้ตลอดเวลา\n" +
-          "3. วางแผนการเงิน: เปิดเมนู 3 ขีด ☰ แล้วเลือก 'วางแผนการเงิน' เพื่อจัดสรรงบเป็นเซ็ตครับ";
-      } 
-      // หมวด 4: คำทักทายทั่วไป
-      else if (lower.includes("สวัสดี") || lower.includes("hi") || lower.includes("hello") || lower.includes("หวัดดี")) {
+      if (lower.includes("เลื่อน") || lower.includes("ขยับ") || lower.includes("พัง") || lower.includes("บั๊ก") || lower.includes("ใช้ไม่ได้") || lower.includes("ค้าง")) {
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\nคุณกำลังสอบถามเกี่ยวกับ **ปัญหาการใช้งาน / หน้าจอเลื่อนไม่ได้ใช่ไหมครับ?**\n\n💡 **วิธีแก้ไข:** แนะนำให้รีเฟรชหน้าเว็บ 1 ครั้ง ระบบจะปลดล็อกและกลับมาเลื่อนได้ปกติครับ หรือกดแจ้งปัญหาในเมนู 3 ขีดได้เลย!";
+      } else if (lower.includes("รูป") || lower.includes("สลิป") || lower.includes("ภาพ") || lower.includes("โปรไฟล์") || lower.includes("อัปโหลด")) {
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\nคุณกำลังต้องการสอบถามเกี่ยวกับ **การใส่รูปภาพหรืออัปโหลดสลิปโอนเงินใช่ไหมครับ?**\n\n💡 **คำตอบ:** กดที่รูปโปรไฟล์ซ้ายบนเพื่อเปลี่ยนรูป หรือเลือกอัปโหลดสลิปทีละ 1 รูปที่กล่องสแกนหน้าแรกได้เลยครับ";
+      } else if (lower.includes("วิธี") || lower.includes("ยังไง") || lower.includes("ใช้") || lower.includes("เริ่มต้น") || lower.includes("คู่มือ") || lower.includes("app")) {
+        botReplyText = "🤖 AI วิเคราะห์คำถาม:\nคุณกำลังต้องการทราบ **วิธีการใช้งานแอปพลิเคชันใช่ไหมครับ?**\n\n💡 **สรุป:** กดปุ่ม '+' เพื่อจดรายรับ-รายจ่าย, ตั้งเป้าหมายออมเงิน หรือไปที่เมนู 3 ขีดเพื่อจัดสรรงบประมาณล่วงหน้าครับ";
+      } else if (lower.includes("สวัสดี") || lower.includes("hi") || lower.includes("hello")) {
         botReplyText = `🤖 AI วิเคราะห์คำถาม:\nสวัสดีครับคุณ ${userName || "ผู้ใช้"}! มีเรื่องไหนให้ AI ช่วยวิเคราะห์หรือสอบถามแอดมิน พิมพ์บอกได้เลยครับ ยินดีให้บริการ 24 ชม.!`;
-      } 
-      // หมวด 5: กรณีไม่แน่ใจความหมาย -> ถามย้ำเพื่อให้ผู้ใช้ขยายความ แล้วค่อยให้คำตอบ
-      else {
-        botReplyText = "🤖 AI วิเคราะห์คำถาม:\n" +
-          `อืมน้า... จากข้อความที่คุณพิมพ์มาว่า "${userText}" AI ยังไม่แน่ใจว่าคุณหมายถึงเรื่องอะไรเป็นพิเศษ\n\n` +
-          "❓ **คุณต้องการสอบถามเกี่ยวกับเรื่องใดด้านล่างนี้หรือเปล่าครับ?**\n" +
-          "1. วิธีใช้งานแอปพลิเคชัน / เริ่มต้นใช้งาน\n" +
-          "2. วิธีการใส่รูปภาพ / สแกนสลิปโอนเงิน\n" +
-          "3. ปัญหาการใช้งาน / หน้าจอเลื่อนไม่ได้\n" +
-          "4. การวางแผนการเงิน / เป้าหมายออมเงิน\n\n" +
-          "พิมพ์ระบุหัวข้อหรือพิมพ์อธิบายเพิ่มเติมได้เลยครับ AI พร้อมตอบคำตอบให้ทันที!";
+      } else {
+        botReplyText = `🤖 AI วิเคราะห์คำถาม:\nอืมน้า... จากข้อความ "${userText}" AI ยังไม่แน่ใจว่าคุณหมายถึงเรื่องอะไรครับ\n\n❓ **คุณต้องการสอบถามเกี่ยวกับเรื่องใดด้านล่างนี้หรือเปล่าครับ?**\n1. วิธีใช้งานแอปพลิเคชัน\n2. วิธีการใส่รูปภาพ / สแกนสลิป\n3. ปัญหาหน้าจอเลื่อนไม่ได้\n4. การวางแผนการเงิน\n\nพิมพ์ระบุหัวข้อเพิ่มเติมได้เลยครับ AI พร้อมตอบคำตอบให้ทันที!`;
       }
 
-      // ส่งข้อความตอบกลับจากบอท AI
       setTimeout(async () => {
         const botMsgId = (Date.now() + 1).toString();
         const botMsg = {
@@ -683,20 +648,6 @@ function App() {
       const reader = new FileReader();
       reader.onload = (ev) => setUserAvatar(ev.target.result);
       reader.readAsDataURL(file);
-    }
-  };
-
-  const handleAdminLogin = (e) => {
-    e.preventDefault();
-    if (adminUsername.trim() === "Admin" && adminPassword.trim() === "27112547") {
-      setIsAdminLoggedIn(true);
-      setShowAdminLogin(false);
-      setAdminLoginError("");
-      setAdminUsername("");
-      setAdminPassword("");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      setAdminLoginError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
     }
   };
 
@@ -1158,7 +1109,7 @@ function App() {
         </div>
       )}
 
-      {/* 💬 Modal หน้าต่างแชท (AI วิเคราะห์เจตนาและถามย้ำ) */}
+      {/* 💬 Modal หน้าต่างแชท (AI บอทอัจฉริยะ) */}
       {activeModal === "chat_admin" && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl flex flex-col h-[80vh] overflow-hidden">
@@ -1346,8 +1297,22 @@ function App() {
             <button onClick={() => setIsMenuOpen(true)} className="p-2.5 bg-white rounded-2xl border border-gray-200 shadow-sm hover:bg-gray-50 text-xl">☰</button>
             <h1 className="text-xl font-bold text-[#1E1E1E]">งบประมาณของฉัน</h1>
           </div>
+          
+          {/* ปุ่มเข้าสู่ระบบ Admin แบบคลิกเดียวเปิด/ปิด */}
           <button
-            onClick={() => (isAdminLoggedIn ? setIsAdminLoggedIn(false) : setShowAdminLogin(true))}
+            onClick={() => {
+              if (isAdminLoggedIn) {
+                setIsAdminLoggedIn(false);
+              } else {
+                const pass = prompt("กรุณากรอกรหัสผ่านผู้ดูแลระบบ (Admin):");
+                if (pass === "27112547") {
+                  setIsAdminLoggedIn(true);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                } else if (pass !== null) {
+                  alert("รหัสผ่านไม่ถูกต้อง!");
+                }
+              }
+            }}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
               isAdminLoggedIn ? "bg-[#1E1E1E] text-white border-[#1E1E1E]" : "bg-white text-gray-600 border-gray-200"
             }`}
