@@ -1,9 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  Plus, Pencil, Trash2, Check, X, Target, ArrowUpRight, ArrowDownRight,
-  ImagePlus, Loader2, Users, Scale, PlusCircle, Shield, PiggyBank,
-  ChevronLeft, ChevronRight,
-} from "lucide-react";
+const { useState, useEffect, useRef } = React;
 
 const EXPENSE_CATEGORIES = [
   { key: "food", label: "อาหาร", color: "#A6303B" },
@@ -30,15 +25,6 @@ const ACCOUNTS = [
   { key: "cash", label: "เงินสด" },
 ];
 const ACCOUNT_LABEL = Object.fromEntries(ACCOUNTS.map((a) => [a.key, a.label]));
-
-const TUTORIAL_STEPS = [
-  { title: "ยินดีต้อนรับ", body: "แอปนี้ช่วยบันทึกรายรับ-รายจ่าย ตั้งเป้าหมายการออม ติดตามหนี้สิน และวางแผนงบประมาณล่วงหน้า ใช้เวลาไม่ถึงนาทีมาดูกันว่าแต่ละส่วนทำอะไรได้บ้าง" },
-  { title: "ยอดคงเหลือแบบสด", body: "การ์ดด้านบนสุดแสดงยอดคงเหลือรวม แยกเป็นยอดในธนาคารและเงินสด อัปเดตทันทีทุกครั้งที่เพิ่มหรือแก้ไขรายการ" },
-  { title: "เพิ่มรายการและนำเข้าจากสลิป", body: "กรอกรายรับ-รายจ่ายเองในฟอร์ม \"เพิ่มรายการ\" หรืออัปโหลดรูปสลิปโอนเงินให้ AI อ่านยอดให้อัตโนมัติ เลือกได้หลายรูปพร้อมกัน แล้วตรวจสอบก่อนกดยืนยัน" },
-  { title: "เป้าหมายการออมและงบประมาณ", body: "เพิ่มเป้าหมายการออมได้หลายอัน กดฝาก/ถอนเพื่ออัปเดตความคืบหน้า และตั้ง \"เซ็ตงบประมาณ\" รายเดือนเพื่อให้ระบบคำนวณงบต่อวันให้ล่วงหน้า" },
-  { title: "หนี้สินและการปรับยอด", body: "บันทึกเงินที่ติดหนี้คนอื่นหรือรอเบิกคืน พร้อมวันครบกำหนด ถ้ายอดในระบบไม่ตรงกับยอดจริงในกระเป๋า ใช้ปุ่ม \"ปรับยอดให้ตรงกับบัญชีจริง\" ได้ทันที" },
-  { title: "โปรไฟล์และการใช้ร่วมกัน", body: "ตั้งชื่อและรูปโปรไฟล์ได้ในหน้าโปรไฟล์ และเลือกเปิดโหมด \"ใช้ร่วมกัน\" ถ้าต้องการให้คนอื่นเห็นข้อมูลชุดเดียวกัน (ไม่มีการล็อกอินด้วยอีเมลจริง เป็นเพียงชื่อที่พิมพ์เอง)" },
-];
 
 const API_BASE_URL = "https://budget-backend-o7fq.onrender.com";
 const FIREBASE_DB_URL = "https://budget-planner-app-b6620-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -108,8 +94,6 @@ function budgetSetStats(s) {
 }
 
 const CONSENT_KEY = "budget-planner-consent-v1";
-const TUTORIAL_KEY = "budget-planner-tutorial-v1";
-const PROFILE_KEY = "budget-planner-profile-v1";
 const SCOPE_KEY = "budget-planner-scope-v2";
 const DATA_KEY_PRIVATE = "budget-planner-data-v4";
 const DATA_KEY_SHARED = "budget-planner-data-shared-v4";
@@ -119,11 +103,6 @@ export default function BudgetPlanner() {
 
   const [consentChecked, setConsentChecked] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
-  const [consentModalOpen, setConsentModalOpen] = useState(false);
-
-  const [tutorialSeen, setTutorialSeen] = useState(true);
-  const [tutorialOpen, setTutorialOpen] = useState(false);
-  const [tutorialStep, setTutorialStep] = useState(0);
 
   const [profile, setProfile] = useState({ name: "", avatar: null });
   const profileFirstLoad = useRef(true);
@@ -231,21 +210,6 @@ export default function BudgetPlanner() {
       setConsentGiven(consent);
       setConsentChecked(true);
 
-      let seenTutorial = false;
-      try {
-        const t = await window.storage.get(TUTORIAL_KEY, false);
-        seenTutorial = !!(t && t.value === "true");
-      } catch (e) {}
-      setTutorialSeen(seenTutorial);
-
-      try {
-        const p = await window.storage.get(PROFILE_KEY, false);
-        if (p && p.value) {
-          const parsedP = JSON.parse(p.value);
-          setProfile({ name: parsedP.name || "", avatar: parsedP.avatar || null });
-        }
-      } catch (e) {}
-
       let scope = "private";
       try {
         const r = await window.storage.get(SCOPE_KEY, false);
@@ -257,7 +221,6 @@ export default function BudgetPlanner() {
     })();
   }, []);
 
-  // Firebase Realtime Sync (Heartbeat, Announcement, Chat)
   useEffect(() => {
     if (!profile.name) return;
     const sendHeartbeat = async () => {
@@ -382,45 +345,12 @@ export default function BudgetPlanner() {
     } catch (err) {}
   };
 
-  useEffect(() => {
-    if (consentChecked && consentGiven && !tutorialSeen && !consentModalOpen) {
-      setTutorialOpen(true);
-    }
-  }, [consentChecked, consentGiven, tutorialSeen, consentModalOpen]);
-
   async function handleAcceptConsent() {
     setConsentGiven(true);
-    setConsentModalOpen(false);
     try {
       await window.storage.set(CONSENT_KEY, "true", false);
     } catch (e) {}
   }
-
-  async function markTutorialSeen() {
-    setTutorialSeen(true);
-    setTutorialOpen(false);
-    try {
-      await window.storage.set(TUTORIAL_KEY, "true", false);
-    } catch (e) {}
-  }
-
-  function openTutorial() {
-    setTutorialStep(0);
-    setTutorialOpen(true);
-  }
-
-  useEffect(() => {
-    if (!consentChecked) return;
-    if (profileFirstLoad.current) {
-      profileFirstLoad.current = false;
-      return;
-    }
-    (async () => {
-      try {
-        await window.storage.set(PROFILE_KEY, JSON.stringify(profile), false);
-      } catch (e) {}
-    })();
-  }, [profile, consentChecked]);
 
   async function handleAvatarChange(e) {
     const file = e.target.files && e.target.files[0];
@@ -499,20 +429,6 @@ export default function BudgetPlanner() {
       });
     return Object.entries(map).map(([name, v]) => ({ name, ...v }));
   }, [debts]);
-
-  const combinedActivity = useMemo(() => {
-    const txItems = transactions.map((t) => ({
-      key: "t" + t.id, id: t.id,
-      label: (t.type === "income" ? "รายรับ" : "รายจ่าย") + " · " + categoryInfo(t.category).label,
-      amount: t.amount, addedBy: t.addedBy,
-    }));
-    const debtItems = debts.map((d) => ({
-      key: "d" + d.id, id: d.id,
-      label: (d.kind === "debt" ? "หนี้" : "เบิก") + " · " + d.description,
-      amount: d.amount, addedBy: d.addedBy,
-    }));
-    return [...txItems, ...debtItems].sort((a, b) => b.id - a.id).slice(0, 20);
-  }, [transactions, debts]);
 
   const currentCategoryOptions = formType === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
 
@@ -933,10 +849,6 @@ export default function BudgetPlanner() {
         .bp-modal-body { font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin-bottom: 16px; }
         .bp-modal-body ul { padding-left: 18px; margin: 8px 0; }
         .bp-modal-body li { margin-bottom: 4px; }
-        .bp-tutorial-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 16px; }
-        .bp-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); transition: all 0.2s; }
-        .bp-dot.active { background: var(--ink); width: 16px; border-radius: 3px; }
-        .bp-tutorial-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
       `}</style>
 
       {activeAnnouncement && (
@@ -954,50 +866,14 @@ export default function BudgetPlanner() {
         </div>
       )}
 
-      {(!consentGiven || consentModalOpen) && consentChecked && (
+      {!consentGiven && consentChecked && (
         <div className="bp-modal-overlay">
           <div className="bp-modal-card">
             <h2 className="bp-modal-title">การเก็บข้อมูลของคุณ</h2>
             <div className="bp-modal-body">
-              <p>แอปนี้จะเก็บข้อมูลต่อไปนี้ไว้ในระบบเก็บข้อมูลที่ผูกกับบัญชีของคุณ:</p>
-              <ul>
-                <li>รายรับ-รายจ่าย เป้าหมายการออม เซ็ตงบประมาณ และรายการหนี้สิน/รายการเบิกที่คุณกรอก</li>
-                <li>ชื่อโปรไฟล์และรูปโปรไฟล์ที่คุณอัปโหลด</li>
-                <li>รูปสลิปโอนเงินที่คุณเลือกอัปโหลด — รูปจะถูกส่งให้ AI อ่านยอดเงินหนึ่งครั้ง แล้วเก็บรูปย่อไว้ในระบบเดียวกันเพื่อดูย้อนหลังได้</li>
-              </ul>
-              <p>ถ้าคุณเปิดโหมด "ใช้ร่วมกัน" ข้อมูลข้างต้นทั้งหมด รวมถึงชื่อโปรไฟล์ที่พิมพ์ไว้ จะมองเห็นได้กับทุกคนที่เปิดหน้านี้แล้วเลือกโหมดเดียวกัน</p>
-              <p>ระบบนี้ไม่มีการเข้าสู่ระบบด้วยอีเมลจริงและไม่มีรหัสผ่าน ชื่อโปรไฟล์เป็นเพียงข้อความที่คุณพิมพ์เอง ไม่ใช่การยืนยันตัวตน</p>
+              <p>แอปนี้จะเก็บข้อมูลรายรับ-รายจ่าย เป้าหมาย และชื่อโปรไฟล์ของคุณ</p>
             </div>
-            {!consentGiven ? (
-              <button className="bp-add-btn income" style={{ width: "100%" }} onClick={handleAcceptConsent}><Check size={15} /> ยอมรับและเข้าใช้งาน</button>
-            ) : (
-              <button className="bp-add-btn income" style={{ width: "100%" }} onClick={() => setConsentModalOpen(false)}>ปิด</button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {tutorialOpen && consentGiven && !consentModalOpen && (
-        <div className="bp-modal-overlay">
-          <div className="bp-modal-card">
-            <h2 className="bp-modal-title">{TUTORIAL_STEPS[tutorialStep].title}</h2>
-            <div className="bp-modal-body"><p>{TUTORIAL_STEPS[tutorialStep].body}</p></div>
-            <div className="bp-tutorial-dots">
-              {TUTORIAL_STEPS.map((_, i) => (<span key={i} className={`bp-dot ${i === tutorialStep ? "active" : ""}`} />))}
-            </div>
-            <div className="bp-tutorial-actions">
-              <button className="bp-policy-link" onClick={markTutorialSeen}>ข้าม</button>
-              <div style={{ display: "flex", gap: 8 }}>
-                {tutorialStep > 0 && (
-                  <button className="bp-icon-btn" style={{ border: "1px solid var(--line)", borderRadius: 9 }} onClick={() => setTutorialStep((s) => s - 1)}><ChevronLeft size={16} /></button>
-                )}
-                {tutorialStep < TUTORIAL_STEPS.length - 1 ? (
-                  <button className="bp-add-btn income" onClick={() => setTutorialStep((s) => s + 1)} style={{ marginTop: 0 }}>ถัดไป <ChevronRight size={15} /></button>
-                ) : (
-                  <button className="bp-add-btn income" onClick={markTutorialSeen} style={{ marginTop: 0 }}><Check size={15} /> เริ่มใช้งาน</button>
-                )}
-              </div>
-            </div>
+            <button className="bp-add-btn income" style={{ width: "100%" }} onClick={handleAcceptConsent}>ยอมรับและเข้าใช้งาน</button>
           </div>
         </div>
       )}
@@ -1006,29 +882,23 @@ export default function BudgetPlanner() {
         <h1 className="bp-title">งบประมาณของฉัน</h1>
         <div className="bp-header-btns">
           <button className={`bp-scope-btn ${showAdminView ? "shared" : ""}`} onClick={() => setShowAdminView((v) => !v)}>
-            <Shield size={13} /> ผู้ดูแลระบบ
+            ผู้ดูแลระบบ
           </button>
           <button className={`bp-scope-btn ${dataScope === "shared" ? "shared" : ""}`} onClick={() => switchScope(dataScope === "shared" ? "private" : "shared")}>
-            <Users size={13} /> {dataScope === "shared" ? "ใช้ร่วมกัน" : "ส่วนตัว"}
+            {dataScope === "shared" ? "ใช้ร่วมกัน" : "ส่วนตัว"}
           </button>
         </div>
       </div>
-      <div className="bp-link-row">
-        <button className="bp-policy-link" onClick={() => setConsentModalOpen(true)}>นโยบายข้อมูล</button>
-        <button className="bp-policy-link" onClick={openTutorial}>คู่มือการใช้งาน</button>
-      </div>
       {dataScope === "shared" && (
         <p className="bp-scope-note" style={{ marginBottom: 14 }}>
-          โหมดนี้เปิดอยู่: ทุกคนที่เปิดหน้านี้แล้วเลือกโหมด "ใช้ร่วมกัน" จะเห็นและแก้ไขรายการ เป้าหมาย และหนี้สินเดียวกันทั้งหมด
+          โหมดนี้เปิดอยู่: ทุกคนที่เปิดหน้านี้ร่วมกันจะเห็นข้อมูลชุดเดียวกัน
         </p>
       )}
 
       {showAdminView && (
         <div className="bp-card bp-admin-card">
-          <div className="bp-card-head"><Shield size={16} color="var(--gold)" /><span className="bp-section-title">ระบบหลังบ้านผู้ดูแลระบบ (Firebase Cloud Dashboard)</span></div>
-          <p className="bp-admin-note">
-            จัดการระบบ ประกาศแจ้งเตือน และดูรายชื่อผู้ใช้งานออนไลน์แบบ Real-time
-          </p>
+          <div className="bp-card-head"><span className="bp-section-title">ระบบหลังบ้านผู้ดูแลระบบ (Firebase Cloud Dashboard)</span></div>
+          <p className="bp-admin-note">จัดการระบบ ประกาศแจ้งเตือน และดูรายชื่อผู้ใช้งานออนไลน์แบบ Real-time</p>
 
           <div style={{ background: "#fff", padding: 12, borderRadius: 12, marginBottom: 14, border: "1px solid var(--line)" }}>
             <p className="bp-section-title" style={{ marginBottom: 8 }}>ส่งข้อความประกาศแจ้งเตือน (เด้งเฉพาะผู้ที่ออนไลน์อยู่)</p>
@@ -1064,7 +934,6 @@ export default function BudgetPlanner() {
         <div className="bp-profile-row">
           <div className="bp-avatar-wrap" onClick={() => avatarInputRef.current && avatarInputRef.current.click()}>
             {profile.avatar ? (<img src={profile.avatar} className="bp-avatar-img" alt="รูปโปรไฟล์" />) : (<div className="bp-avatar-placeholder">{(profile.name || "?").slice(0, 1)}</div>)}
-            <span className="bp-avatar-edit-badge"><Pencil size={11} /></span>
           </div>
           <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarChange} />
           <div style={{ flex: 1 }}>
@@ -1072,15 +941,14 @@ export default function BudgetPlanner() {
             <input className="bp-input" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="เช่น Gun" />
           </div>
         </div>
-        <p className="bp-slip-hint" style={{ marginTop: 10 }}>ชื่อนี้จะแสดงเป็น "ผู้เพิ่มรายการ" เมื่อเปิดโหมด "ใช้ร่วมกัน" และใช้แสดงสถานะออนไลน์ในระบบหลังบ้าน</p>
       </div>
 
       <div className="bp-card bp-hero">
         <p className="bp-hero-label">คงเหลือทั้งหมด</p>
         <p className="bp-hero-balance">{formatMoney(balance)}<small>บาท</small></p>
         <div className="bp-hero-row">
-          <div className="bp-hero-stat in"><ArrowUpRight size={14} /> รายรับ <b>{formatMoney(totalIncome)}</b></div>
-          <div className="bp-hero-stat out"><ArrowDownRight size={14} /> รายจ่าย <b>{formatMoney(totalExpense)}</b></div>
+          <div className="bp-hero-stat in">รายรับ <b>{formatMoney(totalIncome)}</b></div>
+          <div className="bp-hero-stat out">รายจ่าย <b>{formatMoney(totalExpense)}</b></div>
         </div>
         <div className="bp-hero-accounts">
           <span>ธนาคาร <b>{formatMoney(bankBalance)}</b> บาท</span>
@@ -1089,10 +957,7 @@ export default function BudgetPlanner() {
       </div>
 
       <div className="bp-card">
-        <div className="bp-card-head"><PiggyBank size={16} color="var(--ink-soft)" /><span className="bp-section-title">จัดสรรงบประมาณเป็นเซ็ต</span></div>
-        <p className="bp-slip-hint" style={{ margin: "0 0 12px" }}>
-          ตั้งวงเงินต่อเดือนของแต่ละเซ็ต ระบบคำนวณงบต่อวันให้ล่วงหน้า เป็นเครื่องมือวางแผนแยกต่างหาก ไม่ได้ผูกกับรายการรายรับ-รายจ่ายด้านล่างอัตโนมัติ กดปุ่ม "ใช้ไป" เพื่ออัปเดตยอดใช้ในเซ็ตเอง
-        </p>
+        <div className="bp-card-head"><span className="bp-section-title">จัดสรรงบประมาณเป็นเซ็ต</span></div>
         {budgetSets.length === 0 && <p className="bp-empty">ยังไม่มีเซ็ตงบประมาณ เพิ่มเซ็ตแรกได้เลย</p>}
         {budgetSets.map((s) => {
           if (editingBudgetSetId === s.id) {
@@ -1101,8 +966,8 @@ export default function BudgetPlanner() {
                 <div><label className="bp-field-label">ชื่อเซ็ต</label><input value={budgetSetDraft.name} onChange={(e) => setBudgetSetDraft({ ...budgetSetDraft, name: e.target.value })} /></div>
                 <div><label className="bp-field-label">วงเงินต่อเดือน (บาท)</label><input type="number" value={budgetSetDraft.monthlyAmount} onChange={(e) => setBudgetSetDraft({ ...budgetSetDraft, monthlyAmount: e.target.value })} /></div>
                 <div className="bp-goal-actions">
-                  <button className="bp-add-btn income" style={{ flex: 1, padding: "9px" }} onClick={saveBudgetSetEdit}><Check size={15} /> บันทึก</button>
-                  <button className="bp-icon-btn" style={{ border: "1px solid var(--line)", borderRadius: 9 }} onClick={cancelBudgetSetEdit}><X size={16} /></button>
+                  <button className="bp-add-btn income" style={{ flex: 1, padding: "9px" }} onClick={saveBudgetSetEdit}>บันทึก</button>
+                  <button className="bp-slip-discard" onClick={cancelBudgetSetEdit}>ยกเลิก</button>
                 </div>
               </div>
             );
@@ -1114,38 +979,38 @@ export default function BudgetPlanner() {
               <div className="bp-goal-row">
                 <span className="bp-goal-name">{s.name}</span>
                 <div className="bp-goal-item-actions">
-                  <button className="bp-icon-btn" onClick={() => startEditBudgetSet(s)}><Pencil size={13} /></button>
-                  <button className="bp-icon-btn" onClick={() => deleteBudgetSet(s.id)}><Trash2 size={13} /></button>
+                  <button className="bp-icon-btn" onClick={() => startEditBudgetSet(s)}>แก้ไข</button>
+                  <button className="bp-icon-btn" onClick={() => deleteBudgetSet(s.id)}>ลบ</button>
                 </div>
               </div>
               <div className="bp-goal-track"><div className="bp-goal-fill" style={{ width: `${pct}%`, background: pct >= 100 ? "var(--expense)" : "var(--gold)" }} /></div>
               <p className="bp-goal-pct">ใช้ไปแล้ว {formatMoney(s.spentThisMonth)} จาก {formatMoney(s.monthlyAmount)} บาท/เดือน</p>
               <div className="bp-budgetset-stats">
-                <span>งบต่อวัน (ตามแผน) <b>{formatMoney(stats.dailyPlanned)}</b> บาท</span>
-                <span>เหลือใช้เฉลี่ย <b style={{ color: stats.dailyRemaining < 0 ? "var(--expense)" : "var(--income)" }}>{formatMoney(stats.dailyRemaining)}</b> บาท/วัน ({stats.daysLeft} วันที่เหลือ)</span>
+                <span>งบต่อวัน <b>{formatMoney(stats.dailyPlanned)}</b> บาท</span>
+                <span>เหลือใช้เฉลี่ย <b style={{ color: stats.dailyRemaining < 0 ? "var(--expense)" : "var(--income)" }}>{formatMoney(stats.dailyRemaining)}</b> บาท/วัน</span>
               </div>
               <div className="bp-contrib-row">
                 <input type="number" placeholder="ใช้ไปเท่าไหร่" value={quickSpendDraft[s.id] || ""} onChange={(e) => setQuickSpendDraft((prev) => ({ ...prev, [s.id]: e.target.value }))} />
                 <button type="button" className="bp-contrib-add" onClick={() => quickSpend(s.id)}>ใช้ไป</button>
-                <button type="button" className="bp-slip-discard" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => resetBudgetSet(s.id)}>รีเซ็ตเดือนนี้</button>
+                <button type="button" className="bp-slip-discard" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => resetBudgetSet(s.id)}>รีเซ็ต</button>
               </div>
             </div>
           );
         })}
         <form className="bp-form-grid" onSubmit={handleAddBudgetSet} style={{ marginTop: budgetSets.length ? 14 : 0 }}>
           <div className="bp-row-2">
-            <div><label className="bp-field-label">ชื่อเซ็ตใหม่</label><input className="bp-input" value={budgetSetForm.name} onChange={(e) => setBudgetSetForm({ ...budgetSetForm, name: e.target.value })} placeholder="เช่น Set 1: ค่ากินรายวัน" /></div>
+            <div><label className="bp-field-label">ชื่อเซ็ตใหม่</label><input className="bp-input" value={budgetSetForm.name} onChange={(e) => setBudgetSetForm({ ...budgetSetForm, name: e.target.value })} placeholder="เช่น เซ็ตค่ากิน" /></div>
             <div><label className="bp-field-label">วงเงิน/เดือน (บาท)</label><input className="bp-input" type="number" value={budgetSetForm.monthlyAmount} onChange={(e) => setBudgetSetForm({ ...budgetSetForm, monthlyAmount: e.target.value })} /></div>
           </div>
-          <button className="bp-add-btn income" type="submit"><PlusCircle size={16} /> เพิ่มเซ็ตงบประมาณ</button>
+          <button className="bp-add-btn income" type="submit">เพิ่มเซ็ตงบประมาณ</button>
         </form>
       </div>
 
       <div className="bp-grid">
         <div>
           <div className="bp-card">
-            <div className="bp-card-head"><Target size={16} color="var(--gold)" /><span className="bp-section-title">เป้าหมายการออม</span></div>
-            {goals.length === 0 && !addingGoal && <p className="bp-empty">ยังไม่มีเป้าหมาย เพิ่มเป้าหมายแรกได้เลย</p>}
+            <div className="bp-card-head"><span className="bp-section-title">เป้าหมายการออม</span></div>
+            {goals.length === 0 && !addingGoal && <p className="bp-empty">ยังไม่มีเป้าหมาย</p>}
             {goals.map((g) =>
               editingGoalId === g.id ? (
                 <div className="bp-goal-form" key={g.id}>
@@ -1155,8 +1020,8 @@ export default function BudgetPlanner() {
                     <div><label className="bp-field-label">ออมแล้ว (บาท)</label><input type="number" value={goalDraft.saved} onChange={(e) => setGoalDraft({ ...goalDraft, saved: e.target.value })} /></div>
                   </div>
                   <div className="bp-goal-actions">
-                    <button className="bp-add-btn income" style={{ flex: 1, padding: "9px" }} onClick={saveGoalDraft}><Check size={15} /> บันทึก</button>
-                    <button className="bp-icon-btn" style={{ border: "1px solid var(--line)", borderRadius: 9 }} onClick={cancelGoalDraft}><X size={16} /></button>
+                    <button className="bp-add-btn income" style={{ flex: 1, padding: "9px" }} onClick={saveGoalDraft}>บันทึก</button>
+                    <button className="bp-slip-discard" onClick={cancelGoalDraft}>ยกเลิก</button>
                   </div>
                 </div>
               ) : (
@@ -1164,25 +1029,18 @@ export default function BudgetPlanner() {
                   <div className="bp-goal-row">
                     <span className="bp-goal-name">{g.name}</span>
                     <div className="bp-goal-item-actions">
-                      <button className="bp-icon-btn" onClick={() => startEditGoal(g)}><Pencil size={13} /></button>
-                      <button className="bp-icon-btn" onClick={() => deleteGoal(g.id)}><Trash2 size={13} /></button>
+                      <button className="bp-icon-btn" onClick={() => startEditGoal(g)}>แก้ไข</button>
+                      <button className="bp-icon-btn" onClick={() => deleteGoal(g.id)}>ลบ</button>
                     </div>
                   </div>
                   <div className="bp-goal-track"><div className="bp-goal-fill" style={{ width: `${g.target > 0 ? Math.min((g.saved / g.target) * 100, 100) : 0}%` }} /></div>
-                  <p className="bp-goal-pct">{formatMoney(g.saved)} บาท จาก {formatMoney(g.target)} บาท{g.target > 0 ? ` (${Math.round(Math.min(g.saved / g.target, 1) * 100)}%)` : ""}</p>
+                  <p className="bp-goal-pct">{formatMoney(g.saved)} บาท จาก {formatMoney(g.target)} บาท</p>
                   <div className="bp-contrib-row">
                     <button type="button" className={`bp-contrib-type ${(contributionDrafts[g.id]?.type || "deposit") === "deposit" ? "active deposit" : ""}`} onClick={() => setContributionDrafts((prev) => ({ ...prev, [g.id]: { ...(prev[g.id] || { amount: "" }), type: "deposit" } }))}>ฝาก</button>
                     <button type="button" className={`bp-contrib-type ${contributionDrafts[g.id]?.type === "withdraw" ? "active withdraw" : ""}`} onClick={() => setContributionDrafts((prev) => ({ ...prev, [g.id]: { ...(prev[g.id] || { amount: "" }), type: "withdraw" } }))}>ถอน</button>
                     <input type="number" placeholder="จำนวนเงิน" value={contributionDrafts[g.id]?.amount || ""} onChange={(e) => setContributionDrafts((prev) => ({ ...prev, [g.id]: { ...(prev[g.id] || { type: "deposit" }), amount: e.target.value } }))} />
                     <button type="button" className="bp-contrib-add" onClick={() => addGoalContribution(g.id, contributionDrafts[g.id]?.amount, contributionDrafts[g.id]?.type || "deposit")}>เพิ่ม</button>
                   </div>
-                  {g.history && g.history.length > 0 && (
-                    <div className="bp-goal-history">
-                      {g.history.slice(0, 3).map((h) => (
-                        <span key={h.id} className={`bp-goal-hist-item ${h.type}`}>{h.type === "withdraw" ? "-" : "+"}{formatMoney(h.amount)} · {formatDateThai(h.date)}</span>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )
             )}
@@ -1194,17 +1052,17 @@ export default function BudgetPlanner() {
                   <div><label className="bp-field-label">ออมแล้ว (บาท)</label><input type="number" value={goalDraft.saved} onChange={(e) => setGoalDraft({ ...goalDraft, saved: e.target.value })} /></div>
                 </div>
                 <div className="bp-goal-actions">
-                  <button className="bp-add-btn income" style={{ flex: 1, padding: "9px" }} onClick={saveGoalDraft}><Check size={15} /> บันทึก</button>
-                  <button className="bp-icon-btn" style={{ border: "1px solid var(--line)", borderRadius: 9 }} onClick={cancelGoalDraft}><X size={16} /></button>
+                  <button className="bp-add-btn income" style={{ flex: 1, padding: "9px" }} onClick={saveGoalDraft}>บันทึก</button>
+                  <button className="bp-slip-discard" onClick={cancelGoalDraft}>ยกเลิก</button>
                 </div>
               </div>
             ) : (
-              <button className="bp-add-goal-btn" onClick={startAddGoal}><PlusCircle size={15} /> เพิ่มเป้าหมายใหม่</button>
+              <button className="bp-add-goal-btn" onClick={startAddGoal}>+ เพิ่มเป้าหมายใหม่</button>
             )}
           </div>
 
           <div className="bp-card">
-            <div className="bp-card-head"><Scale size={16} color="var(--ink-soft)" /><span className="bp-section-title">ปรับยอดให้ตรงกับบัญชีจริง</span></div>
+            <div className="bp-card-head"><span className="bp-section-title">ปรับยอดให้ตรงกับบัญชีจริง</span></div>
             {ACCOUNTS.map((a) => (
               <div className="bp-reconcile-row" key={a.key}>
                 <div className="bp-reconcile-label">{a.label}</div>
@@ -1223,11 +1081,9 @@ export default function BudgetPlanner() {
             <p className="bp-section-title" style={{ marginBottom: 12 }}>นำเข้าจากสลิปโอนเงิน</p>
             <input ref={slipInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { handleSlipFiles(e.target.files); e.target.value = ""; }} />
             <div className="bp-slip-drop" onClick={() => slipInputRef.current && slipInputRef.current.click()}>
-              <ImagePlus size={22} color="var(--ink-soft)" />
               <span className="bp-slip-cta">เลือกรูปสลิป</span>
-              <span className="bp-slip-sub">เลือกได้หลายรูปพร้อมกัน รวมถึงสลิปเก่าที่ยังไม่ได้บันทึก</span>
+              <span className="bp-slip-sub">เลือกได้หลายรูปพร้อมกัน</span>
             </div>
-            <p className="bp-slip-hint">ระบบอ่านยอดเงินและวันที่จากรูปให้อัตโนมัติด้วย AI กรุณาตรวจสอบตัวเลขก่อนกดยืนยันทุกครั้ง ต้องเลือกรูปเองแต่ละครั้ง ระบบยังดึงจากคลังภาพให้อัตโนมัติต่อเนื่องไม่ได้</p>
             {pendingSlips.length > 0 && (
               <div style={{ marginTop: 12 }}>
                 {pendingSlips.map((s) => {
@@ -1237,7 +1093,7 @@ export default function BudgetPlanner() {
                       <img className="bp-slip-thumb" src={s.imageData} alt="สลิปโอนเงิน" />
                       <div className="bp-slip-body">
                         {s.status === "reading" ? (
-                          <div className="bp-slip-status"><Loader2 size={14} className="bp-spin" /> กำลังอ่านยอดเงินจากรูป...</div>
+                          <div className="bp-slip-status">กำลังอ่านยอดเงินจากรูป...</div>
                         ) : (
                           <>
                             {s.status === "manual" && <div className="bp-slip-status">อ่านยอดจากรูปไม่ได้ กรุณากรอกเอง</div>}
@@ -1258,7 +1114,7 @@ export default function BudgetPlanner() {
                               </div>
                             </div>
                             <div className="bp-slip-actions">
-                              <button className="bp-slip-confirm" disabled={!s.amount || parseFloat(s.amount) <= 0} onClick={() => confirmSlip(s.id)}><Check size={14} /> เพิ่มรายการนี้</button>
+                              <button className="bp-slip-confirm" disabled={!s.amount || parseFloat(s.amount) <= 0} onClick={() => confirmSlip(s.id)}>เพิ่มรายการนี้</button>
                               <button className="bp-slip-discard" onClick={() => discardSlip(s.id)}>ยกเลิก</button>
                             </div>
                           </>
@@ -1292,8 +1148,8 @@ export default function BudgetPlanner() {
                 </div>
                 <div><label className="bp-field-label">วันที่</label><input className="bp-input" type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} /></div>
               </div>
-              <div><label className="bp-field-label">รายละเอียด (ไม่บังคับ)</label><input className="bp-input" type="text" placeholder="เช่น ข้าวเที่ยงกับเพื่อน" value={formNote} onChange={(e) => setFormNote(e.target.value)} /></div>
-              <button className={`bp-add-btn ${formType}`} type="submit"><Plus size={16} /> เพิ่มรายการ</button>
+              <div><label className="bp-field-label">รายละเอียด (ไม่บังคับ)</label><input className="bp-input" type="text" placeholder="เช่น ข้าวเที่ยง" value={formNote} onChange={(e) => setFormNote(e.target.value)} /></div>
+              <button className={`bp-add-btn ${formType}`} type="submit">เพิ่มรายการ</button>
             </form>
           </div>
         </div>
@@ -1329,7 +1185,7 @@ export default function BudgetPlanner() {
       <div className="bp-card">
         <p className="bp-section-title" style={{ marginBottom: 12 }}>ใช้จ่ายตามหมวดหมู่</p>
         {categoryBreakdown.length === 0 ? (
-          <p className="bp-empty">ยังไม่มีรายจ่าย เพิ่มรายการเพื่อดูสัดส่วน</p>
+          <p className="bp-empty">ยังไม่มีรายจ่าย</p>
         ) : (
           categoryBreakdown.map((c) => (
             <div className="bp-cat-row" key={c.key}>
@@ -1348,76 +1204,34 @@ export default function BudgetPlanner() {
           <div className="bp-debt-stat expense"><span>ติดหนี้ค้างอยู่</span><b>{formatMoney(totalDebtUnpaid)} บาท</b></div>
           <div className="bp-debt-stat income"><span>รอเบิกคืน</span><b>{formatMoney(totalClaimUnpaid)} บาท</b></div>
         </div>
-        {debtsByPerson.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <p className="bp-field-label" style={{ marginBottom: 8 }}>สรุปตามคู่กรณี (ที่ยังไม่ชำระ)</p>
-            {debtsByPerson.map((p) => (
-              <div className="bp-admin-row" key={p.name}>
-                <span>{p.name}</span>
-                <span>
-                  {p.debt > 0 && <span style={{ color: "var(--expense)" }}>ติดหนี้ {formatMoney(p.debt)}</span>}
-                  {p.debt > 0 && p.claim > 0 && "  ·  "}
-                  {p.claim > 0 && <span style={{ color: "var(--income)" }}>รอเบิก {formatMoney(p.claim)}</span>}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
         <div className="bp-type-toggle">
           <button type="button" className={`bp-type-btn expense ${debtForm.kind === "debt" ? "active expense" : ""}`} onClick={() => setDebtForm({ ...debtForm, kind: "debt" })}>หนี้ที่ติดอยู่</button>
           <button type="button" className={`bp-type-btn income ${debtForm.kind === "claim" ? "active income" : ""}`} onClick={() => setDebtForm({ ...debtForm, kind: "claim" })}>รายการเบิก</button>
         </div>
         <form className="bp-form-grid" onSubmit={handleAddDebt}>
-          <div><label className="bp-field-label">รายละเอียด</label><input className="bp-input" value={debtForm.description} onChange={(e) => setDebtForm({ ...debtForm, description: e.target.value })} placeholder="เช่น ยืมเพื่อนค่าทริป" required /></div>
+          <div><label className="bp-field-label">รายละเอียด</label><input className="bp-input" value={debtForm.description} onChange={(e) => setDebtForm({ ...debtForm, description: e.target.value })} placeholder="เช่น ยืมเพื่อน" required /></div>
           <div className="bp-row-2">
             <div><label className="bp-field-label">จำนวนเงิน (บาท)</label><input className="bp-input bp-amount-input" type="number" value={debtForm.amount} onChange={(e) => setDebtForm({ ...debtForm, amount: e.target.value })} required /></div>
             <div><label className="bp-field-label">กับใคร (ไม่บังคับ)</label><input className="bp-input" value={debtForm.counterparty} onChange={(e) => setDebtForm({ ...debtForm, counterparty: e.target.value })} /></div>
           </div>
-          <div><label className="bp-field-label">วันครบกำหนด (ไม่บังคับ)</label><input className="bp-input" type="date" value={debtForm.dueDate} onChange={(e) => setDebtForm({ ...debtForm, dueDate: e.target.value })} /></div>
-          <button className={`bp-add-btn ${debtForm.kind === "debt" ? "expense" : "income"}`} type="submit"><Plus size={16} /> เพิ่มรายการ</button>
+          <button className={`bp-add-btn ${debtForm.kind === "debt" ? "expense" : "income"}`} type="submit">เพิ่มรายการ</button>
         </form>
-        {sortedDebts.length === 0 ? (
-          <p className="bp-empty" style={{ marginTop: 12 }}>ยังไม่มีรายการหนี้สินหรือรายการเบิก</p>
-        ) : (
+        {sortedDebts.length > 0 && (
           <div className="bp-tx-list" style={{ marginTop: 14 }}>
-            {sortedDebts.map((d) =>
-              editingDebtId === d.id ? (
-                <div className="bp-tx-item" key={d.id}>
-                  <div className="bp-edit-row">
-                    <div className="bp-edit-line">
-                      <input value={debtEditDraft.description} onChange={(e) => setDebtEditDraft({ ...debtEditDraft, description: e.target.value })} />
-                      <input type="number" value={debtEditDraft.amount} onChange={(e) => setDebtEditDraft({ ...debtEditDraft, amount: e.target.value })} />
-                    </div>
-                    <div className="bp-edit-line">
-                      <input placeholder="กับใคร" value={debtEditDraft.counterparty} onChange={(e) => setDebtEditDraft({ ...debtEditDraft, counterparty: e.target.value })} />
-                      <input type="date" value={debtEditDraft.dueDate} onChange={(e) => setDebtEditDraft({ ...debtEditDraft, dueDate: e.target.value })} />
-                    </div>
-                    <div className="bp-edit-actions">
-                      <button className="bp-icon-btn" onClick={saveDebtEdit}><Check size={16} color="var(--income)" /></button>
-                      <button className="bp-icon-btn" onClick={cancelDebtEdit}><X size={16} /></button>
-                    </div>
-                  </div>
+            {sortedDebts.map((d) => (
+              <div className="bp-tx-item" key={d.id}>
+                <span className="bp-tx-dot" style={{ background: d.kind === "debt" ? "var(--expense)" : "var(--income)" }} />
+                <div className="bp-tx-main">
+                  <div className="bp-tx-cat">{d.description}</div>
+                  <div className="bp-tx-note">{d.counterparty}{d.status === "paid" ? " · ชำระแล้ว" : ""}</div>
                 </div>
-              ) : (
-                <div className="bp-tx-item" key={d.id}>
-                  <span className="bp-tx-dot" style={{ background: d.kind === "debt" ? "var(--expense)" : "var(--income)" }} />
-                  <div className="bp-tx-main">
-                    <div className="bp-tx-cat">{d.description}</div>
-                    <div className="bp-tx-note">{d.counterparty}{d.status === "paid" ? " · ชำระแล้ว" : ""}</div>
-                    <div className="bp-tx-date">
-                      {d.dueDate ? `ครบกำหนด ${formatDateThai(d.dueDate)}` : formatDateThai(d.dateAdded)}
-                      {d.status === "unpaid" && d.dueDate && d.dueDate < todayStr() ? <span className="bp-overdue-badge">เลยกำหนด</span> : null}
-                    </div>
-                  </div>
-                  <span className={`bp-tx-amt ${d.kind === "debt" ? "expense" : "income"}`} style={{ opacity: d.status === "paid" ? 0.4 : 1 }}>{formatMoney(d.amount)}</span>
-                  <div className="bp-tx-actions">
-                    <button className="bp-icon-btn" onClick={() => toggleDebtStatus(d.id)} title="ทำเครื่องหมายว่าชำระแล้ว"><Check size={14} color={d.status === "paid" ? "var(--income)" : "var(--ink-faint)"} /></button>
-                    <button className="bp-icon-btn" onClick={() => startEditDebt(d)}><Pencil size={14} /></button>
-                    <button className="bp-icon-btn" onClick={() => deleteDebt(d.id)}><Trash2 size={14} /></button>
-                  </div>
+                <span className={`bp-tx-amt ${d.kind === "debt" ? "expense" : "income"}`}>{formatMoney(d.amount)}</span>
+                <div className="bp-tx-actions">
+                  <button className="bp-icon-btn" onClick={() => toggleDebtStatus(d.id)}>✓</button>
+                  <button className="bp-icon-btn" onClick={() => deleteDebt(d.id)}>ลบ</button>
                 </div>
-              )
-            )}
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -1425,7 +1239,7 @@ export default function BudgetPlanner() {
       <div className="bp-card">
         <p className="bp-section-title" style={{ marginBottom: 12 }}>รายการทั้งหมด ({transactions.length})</p>
         {sortedTransactions.length === 0 ? (
-          <p className="bp-empty">ยังไม่มีรายการ เริ่มเพิ่มรายรับหรือรายจ่ายด้านบนได้เลย</p>
+          <p className="bp-empty">ยังไม่มีรายการ</p>
         ) : (
           <div className="bp-tx-list bp-tx-cols">
             {sortedTransactions.map((t) => {
@@ -1442,18 +1256,9 @@ export default function BudgetPlanner() {
                           {opts.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
                         </select>
                       </div>
-                      <div className="bp-edit-line">
-                        <input type="text" placeholder="รายละเอียด" value={editDraft.note} onChange={(e) => setEditDraft({ ...editDraft, note: e.target.value })} />
-                        <input type="date" value={editDraft.date} onChange={(e) => setEditDraft({ ...editDraft, date: e.target.value })} />
-                      </div>
-                      <div className="bp-edit-line">
-                        <select value={editDraft.account || "bank"} onChange={(e) => setEditDraft({ ...editDraft, account: e.target.value })}>
-                          {ACCOUNTS.map((a) => (<option key={a.key} value={a.key}>{a.label}</option>))}
-                        </select>
-                      </div>
                       <div className="bp-edit-actions">
-                        <button className="bp-icon-btn" onClick={saveEdit}><Check size={16} color="var(--income)" /></button>
-                        <button className="bp-icon-btn" onClick={cancelEdit}><X size={16} /></button>
+                        <button className="bp-icon-btn" onClick={saveEdit}>บันทึก</button>
+                        <button className="bp-icon-btn" onClick={cancelEdit}>ยกเลิก</button>
                       </div>
                     </div>
                   </div>
@@ -1465,12 +1270,12 @@ export default function BudgetPlanner() {
                   <div className="bp-tx-main">
                     <div className="bp-tx-cat">{info.label}</div>
                     {t.note && <div className="bp-tx-note">{t.note}</div>}
-                    <div className="bp-tx-date">{formatDateThai(t.date)}{account === "cash" ? ` · ${ACCOUNT_LABEL.cash}` : ""}{t.addedBy ? ` · ${t.addedBy}` : ""}</div>
+                    <div className="bp-tx-date">{formatDateThai(t.date)}{account === "cash" ? ` · ${ACCOUNT_LABEL.cash}` : ""}</div>
                   </div>
                   <span className={`bp-tx-amt ${t.type}`}>{t.type === "income" ? "+" : "−"}{formatMoney(t.amount)}</span>
                   <div className="bp-tx-actions">
-                    <button className="bp-icon-btn" onClick={() => startEdit(t)}><Pencil size={14} /></button>
-                    <button className="bp-icon-btn" onClick={() => deleteTx(t.id)}><Trash2 size={14} /></button>
+                    <button className="bp-icon-btn" onClick={() => startEdit(t)}>แก้ไข</button>
+                    <button className="bp-icon-btn" onClick={() => deleteTx(t.id)}>ลบ</button>
                   </div>
                 </div>
               );
@@ -1479,7 +1284,7 @@ export default function BudgetPlanner() {
         )}
       </div>
 
-      {saveError && <p className="bp-save-note">บันทึกข้อมูลอัตโนมัติไม่สำเร็จ — ข้อมูลจะหายเมื่อปิดหน้านี้</p>}
+      {saveError && <p className="bp-save-note">บันทึกข้อมูลอัตโนมัติไม่สำเร็จ</p>}
     </div>
   );
 }
